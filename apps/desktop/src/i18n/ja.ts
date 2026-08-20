@@ -2438,6 +2438,16 @@ export const ja = defineLocale({
       findWorkspaces: 'ワークスペースを検索',
       findingWorkspaces: 'ワークスペースを検索中…',
       noWorkspaces: 'ワークスペースが見つかりません。',
+      loadInventory: 'アクセス可能なコンピューターを読み込む',
+      loadingInventory: 'Orgo コンピューターを読み込み中…',
+      refreshInventory: 'アクセス可能なコンピューターを更新',
+      searchInventory: 'コンピューターまたはワークスペースを検索…',
+      inventoryScopeHint:
+        'アクセス範囲は Orgo が制御します。アカウント全体のキーでは所有・共有ワークスペース、限定キーでは対象ワークスペースのみ表示されます。',
+      inventorySummary: (workspaces, computers) =>
+        `${workspaces} ワークスペース · ${computers} コンピューター`,
+      inventoryMatches: count => `${count} 件`,
+      inventoryListLabel: 'アクセス可能な Orgo コンピューター',
       computer: 'Orgo コンピューター',
       computerPlaceholder: 'コンピューターを検索…',
       noComputers: 'コンピューターが見つかりません。',

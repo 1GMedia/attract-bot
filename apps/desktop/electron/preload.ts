@@ -129,6 +129,7 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
         ensureRunning: () => ipcRenderer.invoke('hermes:orgo-desktop:ensure-running'),
         doctor: () => ipcRenderer.invoke('hermes:orgo-desktop:doctor'),
         syncProfiles: profiles => ipcRenderer.invoke('hermes:orgo-desktop:sync', profiles),
+        listInventory: request => ipcRenderer.invoke('hermes:orgo-desktop:inventory', request),
         listWorkspaces: request => ipcRenderer.invoke('hermes:orgo-desktop:workspaces', request),
         listComputers: request => ipcRenderer.invoke('hermes:orgo-desktop:computers', request),
         tailscaleLocalStatus: () => ipcRenderer.invoke('hermes:orgo-desktop:tailscale:local-status'),

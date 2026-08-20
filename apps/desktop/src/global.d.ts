@@ -126,6 +126,7 @@ declare global {
           message: string
         }>
         syncProfiles: (profiles: string[]) => Promise<{ synced: number; computerId: string }>
+        listInventory: (request?: DesktopOrgoDiscoveryRequest) => Promise<DesktopOrgoInventory>
         listWorkspaces: (request?: DesktopOrgoDiscoveryRequest) => Promise<DesktopOrgoWorkspace[]>
         listComputers: (request?: DesktopOrgoDiscoveryRequest) => Promise<DesktopOrgoComputer[]>
         tailscaleLocalStatus: () => Promise<DesktopTailscaleStatus>
@@ -706,6 +707,11 @@ export interface DesktopOrgoComputer {
   name: string
   status: string
   workspaceId?: string
+}
+
+export interface DesktopOrgoInventory {
+  workspaces: DesktopOrgoWorkspace[]
+  computers: DesktopOrgoComputer[]
 }
 
 export interface DesktopTailscaleStatus {

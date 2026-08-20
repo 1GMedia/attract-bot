@@ -121,6 +121,7 @@ describe('OrgoDesktopPane', () => {
             profile: 'default'
           }),
           getSession: vi.fn().mockResolvedValue(SESSION),
+          listInventory: vi.fn().mockResolvedValue({ computers: [], workspaces: [] }),
           listComputers: vi.fn().mockResolvedValue([]),
           listWorkspaces: vi.fn().mockResolvedValue([]),
           saveConfig: vi.fn(),
@@ -270,39 +271,25 @@ describe('OrgoDesktopPane', () => {
       inheritedFromDefault: false,
       profile: 'default'
     })
-    vi.mocked(window.hermesDesktop.orgoDesktop.listWorkspaces).mockResolvedValue([
-      { id: workspaceId, name: 'Client A' }
-    ])
-    vi.mocked(window.hermesDesktop.orgoDesktop.listComputers).mockResolvedValue([
-      { id: computerId, name: 'Client A Operations', status: 'running', workspaceId }
-    ])
+    vi.mocked(window.hermesDesktop.orgoDesktop.listInventory).mockResolvedValue({
+      workspaces: [{ id: workspaceId, name: 'Client A' }],
+      computers: [{ id: computerId, name: 'Client A Operations', status: 'running', workspaceId }]
+    })
 
     render(<OrgoDesktopPane />)
 
     expect(await screen.findByText('Computer')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Orgo API key'), { target: { value: 'orgo-key' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Find workspaces' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Load accessible computers' }))
 
     await waitFor(() =>
-      expect(window.hermesDesktop.orgoDesktop.listWorkspaces).toHaveBeenCalledWith({
+      expect(window.hermesDesktop.orgoDesktop.listInventory).toHaveBeenCalledWith({
         apiKey: 'orgo-key',
         profile: 'default'
       })
     )
 
-    fireEvent.click(screen.getByRole('combobox', { name: 'Orgo workspace' }))
-    fireEvent.click(await screen.findByText('Client A'))
-
-    await waitFor(() =>
-      expect(window.hermesDesktop.orgoDesktop.listComputers).toHaveBeenCalledWith({
-        apiKey: 'orgo-key',
-        profile: 'default',
-        workspaceId
-      })
-    )
-
-    fireEvent.click(screen.getByRole('combobox', { name: 'Orgo computer' }))
-    fireEvent.click(await screen.findByText('Client A Operations'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Client A Operations, Running, Client A' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save and connect' }))
 
     await waitFor(() =>
@@ -313,6 +300,52 @@ describe('OrgoDesktopPane', () => {
         profile: 'default'
       })
     )
+  })
+
+  it('searches all workspaces returned by Orgo and exposes live computer status', async () => {
+    vi.mocked(window.hermesDesktop.orgoDesktop.getConfig).mockResolvedValue({
+      configured: true,
+      computerId: 'ef2f6e29-3864-494b-a82c-15280c5d9f9e',
+      workspaceId: 'workspace-shared',
+      apiKeySet: true,
+      inheritedFromDefault: false,
+      profile: 'default'
+    })
+    vi.mocked(window.hermesDesktop.orgoDesktop.listInventory).mockResolvedValue({
+      workspaces: [
+        { id: 'workspace-shared', name: 'Shared' },
+        { id: 'workspace-client', name: 'Attract Brands' }
+      ],
+      computers: [
+        {
+          id: 'ef2f6e29-3864-494b-a82c-15280c5d9f9e',
+          name: 'Shared computer',
+          status: 'running',
+          workspaceId: 'workspace-shared'
+        },
+        {
+          id: '60fe709b-1837-476c-87c0-12e74575c94b',
+          name: 'Campaign research',
+          status: 'stopped',
+          workspaceId: 'workspace-client'
+        }
+      ]
+    })
+
+    render(<OrgoDesktopPane />)
+    await waitFor(() => expect(window.hermesDesktop.orgoDesktop.listInventory).toHaveBeenCalled())
+    act(() => requestOrgoDesktopSettings())
+
+    expect(await screen.findByText('2 workspaces · 2 computers')).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Shared computer, Running, Shared' }).getAttribute('aria-pressed')
+    ).toBe('true')
+    fireEvent.change(screen.getByLabelText('Search computers or workspaces…'), {
+      target: { value: 'Attract' }
+    })
+
+    expect(screen.getByRole('button', { name: 'Campaign research, Stopped, Attract Brands' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Shared computer, Running, Shared' })).toBeNull()
   })
 
   it('lets an unconfigured agent return from setup to the computer overview', async () => {

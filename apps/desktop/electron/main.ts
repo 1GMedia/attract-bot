@@ -193,6 +193,7 @@ import {
   findOrCreateSharedHermesComputer,
   getOrgoTailscaleStatus,
   listOrgoComputers,
+  listOrgoInventory,
   listOrgoWorkspaces,
   ORGO_AGENT_MCP_SERVER_NAME,
   ORGO_MCP_SERVER_NAME,
@@ -11042,6 +11043,18 @@ ipcMain.handle('hermes:orgo-desktop:workspaces', async (_event, rawRequest) => {
   }
 
   return listOrgoWorkspaces(apiKey)
+})
+ipcMain.handle('hermes:orgo-desktop:inventory', async (_event, rawRequest) => {
+  const request = rawRequest && typeof rawRequest === 'object' ? rawRequest : {}
+  const profile = orgoDesktopProfileKey(request.profile)
+  const entry = resolveOrgoDesktopProfile(readOrgoDesktopConfig().profiles, profile).entry
+  const apiKey = String(request.apiKey || '').trim() || decryptDesktopSecret(entry?.apiKey)
+
+  if (!apiKey) {
+    throw new Error('Enter an Orgo API key.')
+  }
+
+  return listOrgoInventory(apiKey)
 })
 ipcMain.handle('hermes:orgo-desktop:computers', async (_event, rawRequest) => {
   // Accept the old bare workspace ID for compatibility with an older renderer.
