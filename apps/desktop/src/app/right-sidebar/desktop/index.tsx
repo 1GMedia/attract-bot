@@ -781,10 +781,8 @@ export function OrgoDesktopPane() {
         <div className="absolute inset-0 flex min-h-0 flex-col">
           <RailHeader
             onBack={() => {
-              if (config?.configured) {
-                settingsProfileTargetRef.current = null
-                setView('details')
-              }
+              settingsProfileTargetRef.current = null
+              setView('details')
             }}
             title="Computer"
           />
