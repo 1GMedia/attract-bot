@@ -42,9 +42,9 @@ Fixes #
 
 ### Code
 
-- [ ] I've read the [Contributing Guide](https://github.com/nickvasilescu/hermes-bots/blob/main/CONTRIBUTING.md)
+- [ ] I've read the [Contributing Guide](https://github.com/1GMedia/attract-bot/blob/main/CONTRIBUTING.md)
 - [ ] My commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`fix(scope):`, `feat(scope):`, etc.)
-- [ ] I searched for [existing PRs](https://github.com/nickvasilescu/hermes-bots/pulls) to make sure this isn't a duplicate
+- [ ] I searched for [existing PRs](https://github.com/1GMedia/attract-bot/pulls) to make sure this isn't a duplicate
 - [ ] My PR contains **only** changes related to this fix/feature (no unrelated commits)
 - [ ] I've run the relevant backend or desktop checks from `CONTRIBUTING.md`
 - [ ] I've added tests for my changes (required for bug fixes, strongly encouraged for features)
@@ -72,4 +72,3 @@ Fixes #
 ## Screenshots / Logs
 
 <!-- If applicable, add screenshots or log output showing the fix/feature in action. -->
-

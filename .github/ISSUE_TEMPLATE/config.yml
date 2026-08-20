@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: 📖 Documentation
-    url: https://github.com/nickvasilescu/hermes-bots/blob/main/README.md
+    url: https://github.com/1GMedia/attract-bot/blob/main/README.md
     about: Check the README and docs before opening an issue.
   - name: 🤝 Contributing Guide
-    url: https://github.com/nickvasilescu/hermes-bots/blob/main/CONTRIBUTING.md
+    url: https://github.com/1GMedia/attract-bot/blob/main/CONTRIBUTING.md
     about: Read this before submitting a PR.
   - name: 🔒 Report a vulnerability
-    url: https://github.com/nickvasilescu/hermes-bots/security/advisories/new
+    url: https://github.com/1GMedia/attract-bot/security/advisories/new
     about: Report security issues privately. Do not include secrets in public issues.

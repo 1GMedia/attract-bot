@@ -2424,7 +2424,27 @@ export const ja = defineLocale({
     terminalNew: '新しいターミナル',
     terminalCloseOthers: '他を閉じる',
     terminalCloseAll: 'すべて閉じる',
-    addToChat: 'チャットに追加'
+    addToChat: 'チャットに追加',
+    desktop: {
+      setupDescription:
+        'クライアントごとのエージェントを個別の Orgo ワークスペースとコンピューターに割り当てます。Orgo API キーは OS の認証情報ストアに暗号化して保存されます。',
+      agent: 'クライアントエージェント / サブアカウント',
+      agentPlaceholder: 'エージェントを検索…',
+      agentIsolation: '各エージェントの Hermes メモリ、セッション、ツール、コンピューター認証情報は分離されます。',
+      switchingAgent: 'エージェントを切り替え中…',
+      noAgents: 'エージェントが見つかりません。',
+      workspace: 'Orgo ワークスペース',
+      workspacePlaceholder: 'ワークスペースを検索…',
+      findWorkspaces: 'ワークスペースを検索',
+      findingWorkspaces: 'ワークスペースを検索中…',
+      noWorkspaces: 'ワークスペースが見つかりません。',
+      computer: 'Orgo コンピューター',
+      computerPlaceholder: 'コンピューターを検索…',
+      noComputers: 'コンピューターが見つかりません。',
+      sharedComputer: profile =>
+        `${profile} は共有の既定コンピューターを使用しています。別のワークスペースとコンピューターを選ぶと分離できます。`,
+      useSharedComputer: '共有の既定コンピューターを使用'
+    }
   },
 
   preview: {

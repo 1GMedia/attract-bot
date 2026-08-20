@@ -49,8 +49,8 @@ Send your coding agent this repository URL and the prompt in [`docs/agent-assist
 ### Run it yourself
 
 ```bash
-git clone https://github.com/nickvasilescu/hermes-bots.git
-cd hermes-bots
+git clone https://github.com/1GMedia/attract-bot.git
+cd attract-bot
 ./scripts/setup-hermes-bots.sh --verify --run
 ```
 

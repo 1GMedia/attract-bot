@@ -76,6 +76,8 @@ describe('Orgo fullscreen keyboard ownership', () => {
             profile: 'default'
           }),
           getSession: vi.fn().mockResolvedValue(SESSION),
+          listComputers: vi.fn().mockResolvedValue([]),
+          listWorkspaces: vi.fn().mockResolvedValue([]),
           saveConfig: vi.fn(),
           clearConfig: vi.fn()
         },

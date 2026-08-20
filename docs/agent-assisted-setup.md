@@ -9,7 +9,7 @@ Replace `<workspace>` with the directory where you want the repository:
 ```text
 Set up Korgo Bot from source on this Mac.
 
-1. Clone https://github.com/nickvasilescu/hermes-bots.git into <workspace>/hermes-bots.
+1. Clone https://github.com/1GMedia/attract-bot.git into <workspace>/attract-bot.
 2. Read README.md, AGENTS.md, and apps/desktop/AGENTS.md before changing or running anything.
 3. Do not delete or reset ~/.hermes; it may contain existing profiles and conversations.
 4. Install missing prerequisites only after telling me what is missing. The project requires Git, Node.js 22.22+, npm, uv, and Python 3.11.
@@ -21,8 +21,8 @@ Set up Korgo Bot from source on this Mac.
 ## Manual equivalent
 
 ```bash
-git clone https://github.com/nickvasilescu/hermes-bots.git
-cd hermes-bots
+git clone https://github.com/1GMedia/attract-bot.git
+cd attract-bot
 ./scripts/setup-hermes-bots.sh --verify --run
 ```
 
