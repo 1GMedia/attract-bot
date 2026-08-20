@@ -2316,6 +2316,14 @@ export interface Translations {
       findWorkspaces: string
       findingWorkspaces: string
       noWorkspaces: string
+      loadInventory: string
+      loadingInventory: string
+      refreshInventory: string
+      searchInventory: string
+      inventoryScopeHint: string
+      inventorySummary: (workspaces: number, computers: number) => string
+      inventoryMatches: (count: number) => string
+      inventoryListLabel: string
       computer: string
       computerPlaceholder: string
       noComputers: string

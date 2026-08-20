@@ -2725,6 +2725,16 @@ export const en: Translations = {
       findWorkspaces: 'Find workspaces',
       findingWorkspaces: 'Finding workspaces…',
       noWorkspaces: 'No workspaces found.',
+      loadInventory: 'Load accessible computers',
+      loadingInventory: 'Loading Orgo computers…',
+      refreshInventory: 'Refresh accessible computers',
+      searchInventory: 'Search computers or workspaces…',
+      inventoryScopeHint:
+        'Orgo controls access: account-wide keys show owned/shared workspaces; workspace-scoped keys show only their workspace.',
+      inventorySummary: (workspaces, computers) =>
+        `${workspaces} workspace${workspaces === 1 ? '' : 's'} · ${computers} computer${computers === 1 ? '' : 's'}`,
+      inventoryMatches: count => `${count} match${count === 1 ? '' : 'es'}`,
+      inventoryListLabel: 'Accessible Orgo computers',
       computer: 'Orgo computer',
       computerPlaceholder: 'Search computers…',
       noComputers: 'No computers found.',

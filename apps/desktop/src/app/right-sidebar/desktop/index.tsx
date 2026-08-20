@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react'
 import type RFB from '@novnc/novnc'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { Button } from '@/components/ui/button'
@@ -63,6 +63,148 @@ function RailHeader({ onBack, title }: RailHeaderProps) {
   )
 }
 
+interface OrgoComputerPickerProps {
+  computers: DesktopOrgoComputer[]
+  emptyMessage: string
+  formatMatches: (count: number) => string
+  listLabel: string
+  onSelect: (computer: DesktopOrgoComputer) => void
+  scopeHint: string
+  searchPlaceholder: string
+  selectedComputerId: string
+  summary: string
+  workspaces: DesktopOrgoWorkspace[]
+}
+
+function computerStatusLabel(status: string): string {
+  const normalized = status.trim().toLowerCase()
+
+  return normalized ? normalized.replace(/(^|[-_\s])\w/g, match => match.toUpperCase()) : 'Unknown'
+}
+
+function computerStatusTone(status: string): string {
+  switch (status.trim().toLowerCase()) {
+    case 'running':
+      return 'bg-emerald-500'
+
+    case 'creating':
+
+    case 'restarting':
+
+    case 'starting':
+
+    case 'stopping':
+      return 'bg-amber-500'
+
+    case 'error':
+      return 'bg-red-500'
+
+    default:
+      return 'bg-(--ui-text-quaternary)'
+  }
+}
+
+function OrgoComputerPicker({
+  computers,
+  emptyMessage,
+  formatMatches,
+  listLabel,
+  onSelect,
+  scopeHint,
+  searchPlaceholder,
+  selectedComputerId,
+  summary,
+  workspaces
+}: OrgoComputerPickerProps) {
+  const [search, setSearch] = useState('')
+
+  const groups = useMemo(() => {
+    const query = search.trim().toLowerCase()
+
+    return [...workspaces]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map(workspace => {
+        const workspaceMatch = workspace.name.toLowerCase().includes(query)
+
+        const available = computers
+          .filter(computer => computer.workspaceId === workspace.id)
+          .filter(computer => !query || workspaceMatch || computer.name.toLowerCase().includes(query))
+          .sort((left, right) => left.name.localeCompare(right.name))
+
+        return { available, workspace }
+      })
+      .filter(group => !query || group.workspace.name.toLowerCase().includes(query) || group.available.length > 0)
+  }, [computers, search, workspaces])
+
+  const resultCount = groups.reduce((count, group) => count + group.available.length, 0)
+
+  return (
+    <section className="overflow-hidden rounded-md border border-(--ui-stroke-secondary) bg-(--ui-bg-secondary)">
+      <div className="grid gap-1.5 border-b border-(--ui-stroke-tertiary) p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[0.68rem] font-medium text-(--ui-text-secondary)">{summary}</p>
+          {search ? (
+            <span className="text-[0.62rem] text-(--ui-text-quaternary)">{formatMatches(resultCount)}</span>
+          ) : null}
+        </div>
+        <Input
+          aria-label={searchPlaceholder}
+          onChange={event => setSearch(event.target.value)}
+          placeholder={searchPlaceholder}
+          value={search}
+        />
+        <p className="text-[0.61rem] leading-3.5 text-(--ui-text-quaternary)">{scopeHint}</p>
+      </div>
+
+      <div aria-label={listLabel} className="max-h-64 overflow-y-auto p-1.5" role="list">
+        {groups.length > 0 ? (
+          groups.map(({ available, workspace }) => (
+            <div className="py-1" key={workspace.id} role="listitem">
+              <div className="flex items-center justify-between gap-2 px-2 pb-1 pt-0.5">
+                <p className="truncate text-[0.62rem] font-medium uppercase tracking-wide text-(--ui-text-quaternary)">
+                  {workspace.name}
+                </p>
+                <span className="shrink-0 text-[0.6rem] text-(--ui-text-quaternary)">{available.length}</span>
+              </div>
+              {available.length > 0 ? (
+                <div className="grid gap-0.5">
+                  {available.map(computer => {
+                    const selected = computer.id === selectedComputerId
+                    const status = computerStatusLabel(computer.status)
+
+                    return (
+                      <button
+                        aria-label={`${computer.name}, ${status}, ${workspace.name}`}
+                        aria-pressed={selected}
+                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-(--ui-focus-border) ${
+                          selected
+                            ? 'bg-(--ui-selection-background) text-(--ui-selection-foreground)'
+                            : 'text-(--ui-text-secondary) hover:bg-(--ui-hover-background)'
+                        }`}
+                        key={computer.id}
+                        onClick={() => onSelect(computer)}
+                        type="button"
+                      >
+                        <span className={`size-1.5 shrink-0 rounded-full ${computerStatusTone(computer.status)}`} />
+                        <span className="min-w-0 flex-1 truncate text-[0.68rem] font-medium">{computer.name}</span>
+                        <span className="shrink-0 text-[0.61rem] opacity-70">{status}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="px-2 py-1 text-[0.62rem] text-(--ui-text-quaternary)">{emptyMessage}</p>
+              )}
+            </div>
+          ))
+        ) : (
+          <p className="px-2 py-4 text-center text-[0.65rem] text-(--ui-text-quaternary)">{emptyMessage}</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
 /** The remote desktop's panel bar, in framebuffer pixels. The preview crops
  *  exactly this much off the top: it is chrome, and it reads as a grey seam
  *  against the card. Measured in PIXELS rather than as a fraction because the
@@ -95,6 +237,7 @@ export function OrgoDesktopPane() {
   const [apiKey, setApiKey] = useState('')
   const [workspaces, setWorkspaces] = useState<DesktopOrgoWorkspace[]>([])
   const [computers, setComputers] = useState<DesktopOrgoComputer[]>([])
+  const [inventoryLoaded, setInventoryLoaded] = useState(false)
   const [discovering, setDiscovering] = useState(false)
   const [switchingAgent, setSwitchingAgent] = useState(false)
   const [view, setView] = useState<RailView>('details')
@@ -269,6 +412,7 @@ export function OrgoDesktopPane() {
     setWorkspaceId('')
     setWorkspaces([])
     setComputers([])
+    setInventoryLoaded(false)
     setDiscovering(false)
     setDesktopName('')
     setScreenSize(null)
@@ -290,23 +434,16 @@ export function OrgoDesktopPane() {
       }
 
       try {
-        const [availableWorkspaces, availableComputers] = await Promise.all([
-          window.hermesDesktop.orgoDesktop.listWorkspaces({ profile: activeProfile }),
-          next.workspaceId || next.computerId
-            ? window.hermesDesktop.orgoDesktop.listComputers({
-                profile: activeProfile,
-                workspaceId: next.workspaceId
-              })
-            : Promise.resolve([])
-        ])
+        const inventory = await window.hermesDesktop.orgoDesktop.listInventory({ profile: activeProfile })
 
         if (cancelled) {
           return
         }
 
-        const selectedComputer = availableComputers.find(computer => computer.id === next.computerId)
-        setWorkspaces(availableWorkspaces)
-        setComputers(availableComputers)
+        const selectedComputer = inventory.computers.find(computer => computer.id === next.computerId)
+        setWorkspaces(inventory.workspaces)
+        setComputers(inventory.computers)
+        setInventoryLoaded(true)
         setWorkspaceId(next.workspaceId || selectedComputer?.workspaceId || '')
       } catch {
         // Discovery is recoverable from Settings and must not take down an
@@ -423,7 +560,7 @@ export function OrgoDesktopPane() {
     setError('')
 
     try {
-      const available = await window.hermesDesktop.orgoDesktop.listWorkspaces({
+      const inventory = await window.hermesDesktop.orgoDesktop.listInventory({
         apiKey: apiKey.trim() || undefined,
         profile: activeProfile
       })
@@ -435,12 +572,13 @@ export function OrgoDesktopPane() {
         return
       }
 
-      setWorkspaces(available)
+      setWorkspaces(inventory.workspaces)
+      setComputers(inventory.computers)
+      setInventoryLoaded(true)
 
-      if (workspaceId && !available.some(workspace => workspace.id === workspaceId)) {
+      if (computerId && !inventory.computers.some(computer => computer.id === computerId)) {
         setWorkspaceId('')
         setComputerId('')
-        setComputers([])
       }
     } catch (discoveryError) {
       if (
@@ -459,57 +597,9 @@ export function OrgoDesktopPane() {
     }
   }
 
-  const selectWorkspace = async (name: string) => {
-    const workspace = workspaces.find(candidate => candidate.name === name)
-
-    if (!workspace) {
-      return
-    }
-
-    const discoveryGeneration = discoveryGenerationRef.current + 1
-    discoveryGenerationRef.current = discoveryGeneration
-    setWorkspaceId(workspace.id)
-    setComputerId('')
-    setComputers([])
-    setDiscovering(true)
-    setError('')
-
-    try {
-      const available = await window.hermesDesktop.orgoDesktop.listComputers({
-        apiKey: apiKey.trim() || undefined,
-        profile: activeProfile,
-        workspaceId: workspace.id
-      })
-
-      if (
-        discoveryGeneration === discoveryGenerationRef.current &&
-        activeProfile === normalizeProfileKey($activeGatewayProfile.get())
-      ) {
-        setComputers(available)
-      }
-    } catch (discoveryError) {
-      if (
-        discoveryGeneration === discoveryGenerationRef.current &&
-        activeProfile === normalizeProfileKey($activeGatewayProfile.get())
-      ) {
-        setError(discoveryError instanceof Error ? discoveryError.message : String(discoveryError))
-      }
-    } finally {
-      if (
-        discoveryGeneration === discoveryGenerationRef.current &&
-        activeProfile === normalizeProfileKey($activeGatewayProfile.get())
-      ) {
-        setDiscovering(false)
-      }
-    }
-  }
-
-  const selectComputer = (name: string) => {
-    const computer = computers.find(candidate => candidate.name === name)
-
-    if (computer) {
-      setComputerId(computer.id)
-    }
+  const selectComputer = (computer: DesktopOrgoComputer) => {
+    setComputerId(computer.id)
+    setWorkspaceId(computer.workspaceId || '')
   }
 
   const clearProfileBinding = async () => {
@@ -629,8 +719,6 @@ export function OrgoDesktopPane() {
   }, [settingsRequested])
 
   const label = agentLabel(activeProfile, desktopName)
-  const selectedWorkspace = workspaces.find(workspace => workspace.id === workspaceId)
-  const selectedComputer = computers.find(computer => computer.id === computerId)
 
   const profileOptions = Array.from(
     new Set([activeProfile, ...profiles.map(profile => normalizeProfileKey(profile.name))])
@@ -864,35 +952,23 @@ export function OrgoDesktopPane() {
                   type="button"
                   variant="secondary"
                 >
-                  {discovering ? copy.findingWorkspaces : copy.findWorkspaces}
+                  {discovering ? copy.loadingInventory : inventoryLoaded ? copy.refreshInventory : copy.loadInventory}
                 </Button>
 
-                {workspaces.length > 0 ? (
-                  <label className="grid gap-1.5 text-[0.68rem] text-(--ui-text-secondary)">
-                    {copy.workspace}
-                    <SearchableSelect
-                      ariaLabel={copy.workspace}
-                      emptyMessage={copy.noWorkspaces}
-                      onChange={value => void selectWorkspace(value)}
-                      options={workspaces.map(workspace => workspace.name)}
-                      placeholder={copy.workspacePlaceholder}
-                      value={selectedWorkspace?.name || ''}
-                    />
-                  </label>
-                ) : null}
-
-                {workspaceId && computers.length > 0 ? (
-                  <label className="grid gap-1.5 text-[0.68rem] text-(--ui-text-secondary)">
-                    {copy.computer}
-                    <SearchableSelect
-                      ariaLabel={copy.computer}
-                      emptyMessage={copy.noComputers}
-                      onChange={selectComputer}
-                      options={computers.map(computer => computer.name)}
-                      placeholder={copy.computerPlaceholder}
-                      value={selectedComputer?.name || ''}
-                    />
-                  </label>
+                {inventoryLoaded ? (
+                  <OrgoComputerPicker
+                    computers={computers}
+                    emptyMessage={copy.noComputers}
+                    formatMatches={copy.inventoryMatches}
+                    key={activeProfile}
+                    listLabel={copy.inventoryListLabel}
+                    onSelect={selectComputer}
+                    scopeHint={copy.inventoryScopeHint}
+                    searchPlaceholder={copy.searchInventory}
+                    selectedComputerId={computerId}
+                    summary={copy.inventorySummary(workspaces.length, computers.length)}
+                    workspaces={workspaces}
+                  />
                 ) : null}
 
                 {config?.inheritedFromDefault ? (
