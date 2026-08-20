@@ -2347,7 +2347,25 @@ export const zhHant = defineLocale({
     terminalNew: '新增終端機',
     terminalCloseOthers: '關閉其他',
     terminalCloseAll: '全部關閉',
-    addToChat: '新增至聊天'
+    addToChat: '新增至聊天',
+    desktop: {
+      setupDescription: '將每個客戶代理綁定至各自的 Orgo 工作區與電腦。Orgo API 金鑰會加密儲存在作業系統的憑證儲存區。',
+      agent: '客戶代理 / 子帳戶',
+      agentPlaceholder: '搜尋代理…',
+      agentIsolation: '每個代理都有獨立的 Hermes 記憶、工作階段、工具與電腦憑證。',
+      switchingAgent: '正在切換代理…',
+      noAgents: '找不到代理。',
+      workspace: 'Orgo 工作區',
+      workspacePlaceholder: '搜尋工作區…',
+      findWorkspaces: '尋找工作區',
+      findingWorkspaces: '正在尋找工作區…',
+      noWorkspaces: '找不到工作區。',
+      computer: 'Orgo 電腦',
+      computerPlaceholder: '搜尋電腦…',
+      noComputers: '找不到電腦。',
+      sharedComputer: profile => `${profile} 正在使用共享的預設電腦。請選擇其他工作區與電腦以完成隔離。`,
+      useSharedComputer: '使用共享的預設電腦'
+    }
   },
 
   preview: {

@@ -6,7 +6,7 @@ scope for vulnerability reports.
 
 ## 1. Reporting a Vulnerability
 
-Report Korgo Bot vulnerabilities privately through [GitHub Security Advisories](https://github.com/nickvasilescu/hermes-bots/security/advisories/new). Do not open public issues for security vulnerabilities. This project does not operate a bug bounty program.
+Report Korgo Bot vulnerabilities privately through [GitHub Security Advisories](https://github.com/1GMedia/attract-bot/security/advisories/new). Do not open public issues for security vulnerabilities. This project does not operate a bug bounty program.
 
 If a vulnerability affects unmodified upstream Hermes Agent code, also follow the [Nous Research security policy](https://github.com/NousResearch/hermes-agent/security/policy).
 

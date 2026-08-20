@@ -23,7 +23,7 @@ import { ListRow, SectionHeading, SettingsContent } from './primitives'
 import { UninstallSection } from './uninstall-section'
 
 const HERMES_RELEASE_NOTES_URL = 'https://github.com/NousResearch/hermes-agent/releases'
-const BOT_RELEASE_NOTES_URL = 'https://github.com/nickvasilescu/hermes-bots/releases'
+const BOT_RELEASE_NOTES_URL = 'https://github.com/1GMedia/attract-bot/releases'
 
 function relativeTime(ms: number | undefined, a: Translations['settings']['about']) {
   if (!ms) {

@@ -4,7 +4,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { DesktopOrgoSessionResult } from '@/global'
-import { $activeGatewayProfile } from '@/store/profile'
+import { $activeGatewayProfile, $profiles } from '@/store/profile'
+import type { ProfileInfo } from '@/types/hermes'
 
 import { requestOrgoDesktopSettings, setOrgoDesktopOpen } from '../store'
 
@@ -54,6 +55,17 @@ const { MockRfb, rfbInstances } = vi.hoisted(() => {
   return { MockRfb: Rfb, rfbInstances: instances }
 })
 
+const { ensureGatewayProfileMock, refreshProfilesMock } = vi.hoisted(() => ({
+  ensureGatewayProfileMock: vi.fn(async (_profile: string) => undefined),
+  refreshProfilesMock: vi.fn(async () => [])
+}))
+
+vi.mock('@/store/profile', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ensureGatewayProfile: ensureGatewayProfileMock,
+  refreshProfiles: refreshProfilesMock
+}))
+
 vi.mock('@novnc/novnc', () => ({ default: MockRfb }))
 
 import { OrgoDesktopPane } from './index'
@@ -68,10 +80,24 @@ const SESSION: DesktopOrgoSessionResult = {
   password: 'temporary'
 }
 
+const profile = (name: string, isDefault = false): ProfileInfo => ({
+  has_env: false,
+  is_default: isDefault,
+  model: null,
+  name,
+  path: `/tmp/${name}`,
+  provider: null,
+  skill_count: 0
+})
+
 describe('OrgoDesktopPane', () => {
   beforeEach(() => {
     rfbInstances.length = 0
+    Element.prototype.scrollIntoView = vi.fn()
     $activeGatewayProfile.set('default')
+    $profiles.set([profile('default', true), profile('client-a')])
+    ensureGatewayProfileMock.mockClear()
+    refreshProfilesMock.mockClear()
     setOrgoDesktopOpen(true)
     vi.stubGlobal(
       'ResizeObserver',
@@ -95,6 +121,8 @@ describe('OrgoDesktopPane', () => {
             profile: 'default'
           }),
           getSession: vi.fn().mockResolvedValue(SESSION),
+          listComputers: vi.fn().mockResolvedValue([]),
+          listWorkspaces: vi.fn().mockResolvedValue([]),
           saveConfig: vi.fn(),
           clearConfig: vi.fn()
         },
@@ -107,6 +135,7 @@ describe('OrgoDesktopPane', () => {
     cleanup()
     setOrgoDesktopOpen(false)
     $activeGatewayProfile.set('default')
+    $profiles.set([])
     vi.restoreAllMocks()
   })
 
@@ -222,7 +251,10 @@ describe('OrgoDesktopPane', () => {
     expect(slot).not.toBeNull()
   })
 
-  it('shows recoverable setup when no Orgo desktop is configured', async () => {
+  it('discovers and saves an isolated workspace computer without requiring a raw UUID', async () => {
+    const workspaceId = 'workspace-client-a'
+    const computerId = 'ef2f6e29-3864-494b-a82c-15280c5d9f9e'
+
     vi.mocked(window.hermesDesktop.orgoDesktop.getConfig).mockResolvedValue({
       configured: false,
       computerId: '',
@@ -232,30 +264,77 @@ describe('OrgoDesktopPane', () => {
     })
     vi.mocked(window.hermesDesktop.orgoDesktop.saveConfig).mockResolvedValue({
       configured: true,
-      computerId: 'ef2f6e29-3864-494b-a82c-15280c5d9f9e',
+      computerId,
+      workspaceId,
       apiKeySet: true,
+      inheritedFromDefault: false,
+      profile: 'default'
+    })
+    vi.mocked(window.hermesDesktop.orgoDesktop.listWorkspaces).mockResolvedValue([
+      { id: workspaceId, name: 'Client A' }
+    ])
+    vi.mocked(window.hermesDesktop.orgoDesktop.listComputers).mockResolvedValue([
+      { id: computerId, name: 'Client A Operations', status: 'running', workspaceId }
+    ])
+
+    render(<OrgoDesktopPane />)
+
+    expect(await screen.findByText('Computer')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Orgo API key'), { target: { value: 'orgo-key' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Find workspaces' }))
+
+    await waitFor(() =>
+      expect(window.hermesDesktop.orgoDesktop.listWorkspaces).toHaveBeenCalledWith({
+        apiKey: 'orgo-key',
+        profile: 'default'
+      })
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Orgo workspace' }))
+    fireEvent.click(await screen.findByText('Client A'))
+
+    await waitFor(() =>
+      expect(window.hermesDesktop.orgoDesktop.listComputers).toHaveBeenCalledWith({
+        apiKey: 'orgo-key',
+        profile: 'default',
+        workspaceId
+      })
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Orgo computer' }))
+    fireEvent.click(await screen.findByText('Client A Operations'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save and connect' }))
+
+    await waitFor(() =>
+      expect(window.hermesDesktop.orgoDesktop.saveConfig).toHaveBeenCalledWith({
+        apiKey: 'orgo-key',
+        computerId,
+        workspaceId,
+        profile: 'default'
+      })
+    )
+  })
+
+  it('routes the searchable sub-account selector through the existing Hermes profile switch', async () => {
+    ensureGatewayProfileMock.mockImplementationOnce(async selectedProfile => {
+      $activeGatewayProfile.set(selectedProfile)
+    })
+    vi.mocked(window.hermesDesktop.orgoDesktop.getConfig).mockResolvedValue({
+      configured: false,
+      computerId: '',
+      apiKeySet: false,
       inheritedFromDefault: false,
       profile: 'default'
     })
 
     render(<OrgoDesktopPane />)
 
-    expect(await screen.findByText('Computer')).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Orgo computer ID'), {
-      target: { value: 'ef2f6e29-3864-494b-a82c-15280c5d9f9e' }
-    })
-    expect(screen.getByRole('button', { name: 'Save and connect' }).hasAttribute('disabled')).toBe(true)
-    fireEvent.change(screen.getByLabelText('Orgo API key'), { target: { value: 'orgo-key' } })
-    expect(screen.getByRole('button', { name: 'Save and connect' }).hasAttribute('disabled')).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Save and connect' }))
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Client agent / sub-account' }))
+    fireEvent.click(await screen.findByText('client-a'))
 
-    await waitFor(() =>
-      expect(window.hermesDesktop.orgoDesktop.saveConfig).toHaveBeenCalledWith({
-        apiKey: 'orgo-key',
-        computerId: 'ef2f6e29-3864-494b-a82c-15280c5d9f9e',
-        profile: 'default'
-      })
-    )
+    expect(ensureGatewayProfileMock).toHaveBeenCalledWith('client-a')
+    await waitFor(() => expect(window.hermesDesktop.orgoDesktop.getConfig).toHaveBeenCalledWith('client-a'))
+    expect(screen.getByRole('combobox', { name: 'Client agent / sub-account' }).textContent).toContain('client-a')
   })
 
   it('connects a new agent through the inherited default desktop binding', async () => {

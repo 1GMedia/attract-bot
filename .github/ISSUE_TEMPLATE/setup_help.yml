@@ -11,7 +11,7 @@ body:
         **Quick checks first:**
         - Run `./scripts/setup-hermes-bots.sh --verify` from the repository root
         - Record `git rev-parse --short HEAD`, `node --version`, `npm --version`, and `uv --version`
-        - Check the [README](https://github.com/nickvasilescu/hermes-bots#readme) and [support guide](https://github.com/nickvasilescu/hermes-bots/blob/main/SUPPORT.md)
+        - Check the [README](https://github.com/1GMedia/attract-bot#readme) and [support guide](https://github.com/1GMedia/attract-bot/blob/main/SUPPORT.md)
         - Remove API keys, OAuth codes, cookies, SSH keys, and other credentials from all output
 
   - type: textarea
