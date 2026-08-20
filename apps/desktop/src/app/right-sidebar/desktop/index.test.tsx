@@ -315,6 +315,25 @@ describe('OrgoDesktopPane', () => {
     )
   })
 
+  it('lets an unconfigured agent return from setup to the computer overview', async () => {
+    vi.mocked(window.hermesDesktop.orgoDesktop.getConfig).mockResolvedValue({
+      configured: false,
+      computerId: '',
+      apiKeySet: false,
+      inheritedFromDefault: false,
+      profile: 'default'
+    })
+
+    render(<OrgoDesktopPane />)
+
+    expect(await screen.findByText('Computer')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to details' }))
+
+    expect(screen.getByText('Connect an Orgo computer to see its screen.')).toBeTruthy()
+    expect(screen.getByText('Connect computer')).toBeTruthy()
+    expect(screen.queryByLabelText('Orgo API key')).toBeNull()
+  })
+
   it('routes the searchable sub-account selector through the existing Hermes profile switch', async () => {
     ensureGatewayProfileMock.mockImplementationOnce(async selectedProfile => {
       $activeGatewayProfile.set(selectedProfile)
