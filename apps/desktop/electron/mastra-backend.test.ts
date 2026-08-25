@@ -1,4 +1,5 @@
 import path from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildMastraSpawnSpec, resolveManagedNode, waitForMastraReady } from './mastra-backend'
@@ -15,6 +16,7 @@ describe('Mastra desktop backend', () => {
     const hermesHome = path.resolve('hermes-home')
     const managedNode = path.join(hermesHome, 'managed-node')
     const output = path.join(hermesRoot, 'apps', 'mastra', '.mastra', 'output', 'index.mjs')
+
     const spec = buildMastraSpawnSpec({
       hermesRoot,
       hermesHome,
