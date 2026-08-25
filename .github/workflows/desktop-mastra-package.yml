@@ -41,6 +41,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           HERMES_DESKTOP_PRODUCT: bot
           VITE_HERMES_DESKTOP_PRODUCT: bot
-        run: npm --workspace apps/desktop run pack
+        run: |
+          npm --workspace @hermes/mastra run build
+          npm --workspace apps/desktop run pack
       - name: Smoke packaged Mastra runtime and native dependencies
         run: npm --workspace apps/desktop run smoke:mastra-package

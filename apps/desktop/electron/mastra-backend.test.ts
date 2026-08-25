@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildMastraSpawnSpec, resolveManagedNode, waitForMastraReady } from './mastra-backend'
@@ -10,28 +11,31 @@ describe('Mastra desktop backend', () => {
   })
 
   it('keeps orchestration credentials in the child environment only', () => {
+    const hermesRoot = path.resolve('checkout')
+    const hermesHome = path.resolve('hermes-home')
+    const managedNode = path.join(hermesHome, 'managed-node')
+    const output = path.join(hermesRoot, 'apps', 'mastra', '.mastra', 'output', 'index.mjs')
     const spec = buildMastraSpawnSpec({
-      hermesRoot: '/checkout',
-      hermesHome: '/hermes-home',
+      hermesRoot,
+      hermesHome,
       hermesBaseUrl: 'http://127.0.0.1:8642',
       hermesApiKey: 'ephemeral-hermes-key',
       jwtSecret: 'ephemeral-jwt-secret',
       instanceId: 'desktop-launch-123',
       profile: 'agency',
-      environment: { PATH: '/usr/bin' },
-      platform: 'darwin',
-      exists: candidate => candidate.endsWith('/node/bin/node') || candidate.endsWith('/index.mjs')
+      environment: { NODE: managedNode, PATH: '/usr/bin' },
+      exists: candidate => candidate === managedNode || candidate === output
     })
 
-    expect(spec.command).toBe('/hermes-home/node/bin/node')
-    expect(spec.args).toEqual(['/checkout/apps/mastra/.mastra/output/index.mjs'])
+    expect(spec.command).toBe(managedNode)
+    expect(spec.args).toEqual([output])
     expect(spec.env).toMatchObject({
       KORGO_HERMES_API_KEY: 'ephemeral-hermes-key',
       KORGO_HERMES_URL: 'http://127.0.0.1:8642',
       KORGO_HERMES_PROFILE: 'agency',
       KORGO_MASTRA_PORT: '4112',
       KORGO_MASTRA_JWT_SECRET: 'ephemeral-jwt-secret',
-      KORGO_MASTRA_WORKSPACE_ID: '/checkout'
+      KORGO_MASTRA_WORKSPACE_ID: hermesRoot
     })
   })
 

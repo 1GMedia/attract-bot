@@ -18,9 +18,10 @@ describe('Mastra runtime configuration', () => {
     ).toSatisfy((directory: string) =>
       directory.replaceAll('\\', '/').includes('AppData/Local/Hermes Bots/Mastra')
     )
-    expect(createRuntimeConfig({ XDG_DATA_HOME: '/var/data/tester' }, '/home/tester', 'linux').dataDirectory).toBe(
-      '/var/data/tester/hermes-bots/mastra'
-    )
+    expect(
+      createRuntimeConfig({ XDG_DATA_HOME: '/var/data/tester' }, '/home/tester', 'linux')
+        .dataDirectory.replaceAll('\\', '/')
+    ).toBe('/var/data/tester/hermes-bots/mastra')
   })
 
   it('allows HTTPS remote Hermes but rejects plaintext remote execution', () => {
