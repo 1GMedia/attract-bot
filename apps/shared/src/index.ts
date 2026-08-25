@@ -44,6 +44,26 @@ export {
   JsonRpcGatewayClient,
   type WebSocketLike
 } from './json-rpc-gateway'
+export type {
+  MastraCapabilities,
+  MastraEvidenceSummary,
+  MastraListRunsRequest,
+  MastraListRunsResponse,
+  MastraResolveApprovalInput,
+  MastraRunApproval,
+  MastraRunArtifact,
+  MastraRunDetail,
+  MastraRunError,
+  MastraRunEvent,
+  MastraRunEventsResponse,
+  MastraRunMutation,
+  MastraRunState,
+  MastraRunStep,
+  MastraRunSummary,
+  MastraRuntimeStatus,
+  MastraStartRunInput,
+  MastraUsage
+} from './mastra-runs'
 export { skillInvocationText } from './skill-scaffold'
 export {
   type HermesSkin,

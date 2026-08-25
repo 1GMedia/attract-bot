@@ -54,3 +54,29 @@ export async function ingestKnowledgeDocument(input: {
 
   return { sourceId: input.sourceId, chunkCount: chunks.length };
 }
+
+export interface KnowledgeMatch {
+  score: number;
+  sourceId: string;
+  text: string;
+}
+
+export async function queryApprovedKnowledge(query: string, workspaceId: string, topK = 5): Promise<KnowledgeMatch[]> {
+  const indexes = await knowledgeVectorStore.listIndexes();
+  if (!indexes.includes(KNOWLEDGE_INDEX)) return [];
+
+  const { embeddings } = await fastembed.small.doEmbed({ values: [query] });
+  const matches = await knowledgeVectorStore.query({
+    indexName: KNOWLEDGE_INDEX,
+    queryVector: embeddings[0],
+    topK,
+    minScore: 0.2,
+    filter: { workspaceId },
+  });
+
+  return matches.flatMap((match) => {
+    const sourceId = typeof match.metadata?.sourceId === "string" ? match.metadata.sourceId : "";
+    const text = typeof match.metadata?.text === "string" ? match.metadata.text : "";
+    return sourceId && text ? [{ score: match.score, sourceId, text }] : [];
+  });
+}

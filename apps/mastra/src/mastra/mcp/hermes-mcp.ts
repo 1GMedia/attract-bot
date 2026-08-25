@@ -1,7 +1,5 @@
 import { MCPClient, MCPServer } from "@mastra/mcp";
 import { hermesSupervisorAgent } from "../agents/hermes-supervisor.ts";
-import { queryHermesKnowledgeTool } from "../rag/knowledge.ts";
-import { executeHermesTaskTool } from "../tools/hermes-execution.ts";
 import { hermesTaskLifecycle } from "../workflows/hermes-task-lifecycle.ts";
 
 export const hermesMastraMcpServer = new MCPServer({
@@ -9,7 +7,7 @@ export const hermesMastraMcpServer = new MCPServer({
   name: "Hermes Mastra Orchestration",
   version: "0.1.0",
   agents: { hermesSupervisorAgent },
-  tools: { queryHermesKnowledgeTool, executeHermesTaskTool },
+  tools: {},
   workflows: { hermesTaskLifecycle },
 });
 

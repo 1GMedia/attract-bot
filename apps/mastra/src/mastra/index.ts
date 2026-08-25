@@ -5,21 +5,37 @@ import { PinoLogger } from "@mastra/loggers";
 import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mastra/observability";
 import { hermesSupervisorAgent } from "./agents/hermes-supervisor.ts";
 import { hermesMastraMcpServer } from "./mcp/hermes-mcp.ts";
-import { queryHermesKnowledgeTool } from "./rag/knowledge.ts";
+import { indexConfiguredKnowledgeSources } from "./rag/source-catalog.ts";
 import { mastraRuntimeConfig } from "./runtime-config.ts";
+import { runApiRoutes } from "./runs/routes.ts";
 import { executionEvidenceScorer } from "./scorers/execution-evidence.ts";
 import { knowledgeVectorStore, mastraStorage } from "./storage.ts";
-import { executeHermesTaskTool } from "./tools/hermes-execution.ts";
 import { hermesTaskLifecycle } from "./workflows/hermes-task-lifecycle.ts";
 
 const auth = mastraRuntimeConfig.auth.jwtSecret
   ? new MastraJwtAuth({ secret: mastraRuntimeConfig.auth.jwtSecret })
   : undefined;
 
+await indexConfiguredKnowledgeSources();
+
+async function verifiedCapabilities() {
+  const indexes: string[] = await knowledgeVectorStore.listIndexes().catch((): string[] => []);
+  return {
+    agents: mastraRuntimeConfig.modelConfigured,
+    workflows: true,
+    memory: true,
+    rag: indexes.includes("hermes-knowledge"),
+    evals: true,
+    storage: true,
+    observability: true,
+    mcpServer: true,
+    studio: Boolean(process.env.MASTRA_STUDIO_PATH && mastraRuntimeConfig.auth.configured),
+  };
+}
+
 export const mastra = new Mastra({
   agents: { hermesSupervisorAgent },
   workflows: { hermesTaskLifecycle },
-  tools: { queryHermesKnowledgeTool, executeHermesTaskTool },
   scorers: { executionEvidenceScorer },
   vectors: { knowledgeVectorStore },
   mcpServers: { hermesMastraMcpServer },
@@ -92,20 +108,10 @@ export const mastra = new Mastra({
             executionOwner: true,
             composioOwner: true,
           },
-          capabilities: {
-            agents: true,
-            workflows: true,
-            memory: true,
-            rag: true,
-            evals: true,
-            storage: true,
-            observability: true,
-            mcpClient: true,
-            mcpServer: true,
-            studio: true,
-          },
+          capabilities: await verifiedCapabilities(),
         }),
       }),
+      ...runApiRoutes,
     ],
   },
 });

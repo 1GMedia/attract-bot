@@ -9,6 +9,7 @@ export interface MastraRuntimeConfig {
   port: number;
   dataDirectory: string;
   model: string;
+  modelConfigured: boolean;
   instanceId: string;
   auth: {
     configured: boolean;
@@ -26,6 +27,7 @@ export interface MastraRuntimeConfig {
 export function createRuntimeConfig(
   environment: NodeJS.ProcessEnv = process.env,
   homeDirectory = homedir(),
+  runtimePlatform: NodeJS.Platform = process.platform,
 ): MastraRuntimeConfig {
   const jwtSecret = cleanSecret(environment.KORGO_MASTRA_JWT_SECRET);
   const hermesApiKey = cleanSecret(environment.KORGO_HERMES_API_KEY ?? environment.API_SERVER_KEY);
@@ -33,14 +35,16 @@ export function createRuntimeConfig(
   return {
     host: "127.0.0.1",
     port: parsePort(environment.KORGO_MASTRA_PORT),
-    dataDirectory: environment.KORGO_MASTRA_DATA_DIR?.trim() || join(
+    dataDirectory: environment.KORGO_MASTRA_DATA_DIR?.trim() || defaultDataDirectory(
+      environment,
       homeDirectory,
-      "Library",
-      "Application Support",
-      "Hermes Bots",
-      "Mastra",
+      runtimePlatform,
     ),
     model: normalizeModel(environment.KORGO_MASTRA_MODEL || "openai/gpt-5.6-sol"),
+    modelConfigured: hasModelCredential(
+      normalizeModel(environment.KORGO_MASTRA_MODEL || "openai/gpt-5.6-sol"),
+      environment,
+    ),
     instanceId: environment.KORGO_MASTRA_INSTANCE_ID?.trim() || "standalone",
     auth: {
       configured: Boolean(jwtSecret),
@@ -57,6 +61,32 @@ export function createRuntimeConfig(
       ),
     },
   };
+}
+
+export function defaultDataDirectory(
+  environment: NodeJS.ProcessEnv,
+  homeDirectory: string,
+  runtimePlatform: NodeJS.Platform,
+): string {
+  if (runtimePlatform === "win32") {
+    return join(environment.LOCALAPPDATA?.trim() || join(homeDirectory, "AppData", "Local"), "Hermes Bots", "Mastra");
+  }
+  if (runtimePlatform === "darwin") {
+    return join(homeDirectory, "Library", "Application Support", "Hermes Bots", "Mastra");
+  }
+  return join(environment.XDG_DATA_HOME?.trim() || join(homeDirectory, ".local", "share"), "hermes-bots", "mastra");
+}
+
+export function hasModelCredential(model: string, environment: NodeJS.ProcessEnv = process.env): boolean {
+  const provider = model.split("/", 1)[0]?.toLowerCase();
+  const keys: Record<string, string[]> = {
+    anthropic: ["ANTHROPIC_API_KEY"],
+    google: ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"],
+    openai: ["OPENAI_API_KEY"],
+    openrouter: ["OPENROUTER_API_KEY"],
+  };
+
+  return (keys[provider] || []).some((key) => Boolean(cleanSecret(environment[key])));
 }
 
 export function normalizeModel(value: string): string {

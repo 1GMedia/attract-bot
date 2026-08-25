@@ -16,6 +16,22 @@ export const hermesExecutionOutputSchema = z.object({
   }),
 });
 
+export const hermesLifecycleOutputSchema = hermesExecutionOutputSchema.extend({
+  evidence: z.object({
+    reason: z.string(),
+    score: z.number().min(0).max(1),
+    traceId: z.string().optional(),
+  }),
+  artifacts: z.array(z.object({
+    id: z.string(),
+    kind: z.enum(["file", "link", "text"]),
+    label: z.string(),
+    mimeType: z.string().optional(),
+    value: z.string().optional(),
+    content: z.string().optional(),
+  })),
+});
+
 export const executeHermesTaskTool = createTool({
   id: "execute-hermes-task",
   description: "Delegate an approved task to Hermes, which owns tool execution and connected Composio apps.",

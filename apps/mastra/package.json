@@ -10,12 +10,14 @@
     "start": "mastra start",
     "doctor": "tsx scripts/doctor.ts",
     "canary": "tsx scripts/canary.ts",
+    "canary:connected": "tsx scripts/connected-canary.ts",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm test",
     "fix": "tsc -p . --noEmit"
   },
   "dependencies": {
+    "@hermes/shared": "file:../shared",
     "@mastra/auth": "1.1.2",
     "@mastra/client-js": "1.42.0",
     "@mastra/core": "1.61.0",
