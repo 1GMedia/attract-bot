@@ -29,6 +29,7 @@ import {
   shell,
   systemPreferences
 } from 'electron'
+import type { WebContents } from 'electron'
 import nodePty from 'node-pty'
 
 import { classifyActiveRuntime } from './active-runtime-state'
@@ -164,6 +165,8 @@ import { buildHudWindowUrl } from './hud-url'
 import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle } from './link-title-window'
 import { ensureMainWindow } from './main-window-lifecycle'
 import { buildMastraSpawnSpec, waitForMastraReady } from './mastra-backend'
+import { MastraControlClient } from './mastra-control'
+import { BoundedRestartBudget } from './mastra-restart'
 import {
   oauthGuardMayHardFail,
   oauthSessionIsLive,
@@ -1142,28 +1145,148 @@ function registerMediaProtocol() {
 let mainWindow = null
 const backendConnectionState = createBackendConnectionState<ReturnType<typeof spawn>, any>()
 let mastraProcess: ReturnType<typeof spawn> | null = null
+const mastraControl = new MastraControlClient()
+const mastraEventSubscribers = new Map<number, WebContents>()
+const mastraKnownRunStates = new Map<string, string>()
+let mastraEventCursor: string | undefined
+let mastraPollTimer: ReturnType<typeof setTimeout> | null = null
+let mastraPollInFlight = false
 
-function stopMastraBackend() {
+let mastraLaunchOptions: {
+  hermesRoot: string
+  hermesBaseUrl: string
+  hermesApiKey: string
+  profile?: string | null
+} | null = null
+
+let mastraRestartTimer: ReturnType<typeof setTimeout> | null = null
+let mastraStableTimer: ReturnType<typeof setTimeout> | null = null
+const mastraRestartBudget = new BoundedRestartBudget()
+
+function broadcastMastraEvent(payload: any) {
+  for (const [id, contents] of mastraEventSubscribers) {
+    if (contents.isDestroyed()) {
+      mastraEventSubscribers.delete(id)
+    } else {
+      contents.send('hermes:mastra:event', payload)
+    }
+  }
+}
+
+function trackMastraRun(run: any) {
+  if (!run?.runId || !run?.state) {return}
+  mastraKnownRunStates.set(run.runId, run.state)
+  broadcastMastraEvent({ type: 'run-upserted', cursor: mastraEventCursor || '', run })
+}
+
+function mastraHasActiveRuns() {
+  return [...mastraKnownRunStates.values()].some(state =>
+    ['awaiting-approval', 'preparing', 'queued', 'running'].includes(state)
+  )
+}
+
+function stopMastraPolling() {
+  if (mastraPollTimer) {clearTimeout(mastraPollTimer)}
+  mastraPollTimer = null
+}
+
+function scheduleMastraPoll(delay = 0) {
+  if (mastraPollTimer || mastraPollInFlight || (!mastraEventSubscribers.size && !mastraHasActiveRuns())) {return}
+  mastraPollTimer = setTimeout(() => {
+    mastraPollTimer = null
+    void pollMastraEvents()
+  }, delay)
+}
+
+async function pollMastraEvents() {
+  if (mastraPollInFlight || !mastraControl.instanceId) {return}
+  mastraPollInFlight = true
+
+  try {
+    const update = await mastraControl.pollEvents(mastraEventCursor)
+    mastraEventCursor = update.cursor
+    update.runs.forEach(trackMastraRun)
+  } catch (error) {
+    rememberLog(`[mastra] run update poll failed: ${error?.message || error}`)
+  } finally {
+    mastraPollInFlight = false
+    scheduleMastraPoll(1_000)
+  }
+}
+
+async function broadcastMastraStatus() {
+  broadcastMastraEvent({ type: 'runtime-status', cursor: mastraEventCursor || '', status: await mastraControl.getStatus() })
+}
+
+function stopMastraBackend(options: { mode?: 'local' | 'remote'; reason?: string } = {}) {
   const child = mastraProcess
   mastraProcess = null
+  mastraEventCursor = undefined
+  mastraKnownRunStates.clear()
+  stopMastraPolling()
+
+  if (mastraRestartTimer) {clearTimeout(mastraRestartTimer)}
+
+  if (mastraStableTimer) {clearTimeout(mastraStableTimer)}
+  mastraRestartTimer = null
+  mastraStableTimer = null
+  mastraLaunchOptions = null
+  mastraRestartBudget.reset()
+  mastraControl.detach(options)
+  void broadcastMastraStatus()
 
   if (child && !child.killed) {
     stopBackendChild(child)
   }
 }
 
-async function startMastraBackend(options: {
+function scheduleMastraRestart() {
+  if (mastraRestartTimer || !mastraLaunchOptions) {return}
+  const delay = mastraRestartBudget.nextDelay()
+
+  if (delay == null) {
+    mastraControl.detach({
+      reason: 'Mastra stopped after three restart attempts. Restart Hermes Desktop and inspect the desktop log.'
+    })
+    void broadcastMastraStatus()
+    rememberLog('[mastra] restart budget exhausted after three attempts')
+
+    return
+  }
+
+  rememberLog(`[mastra] scheduling restart attempt ${mastraRestartBudget.attempts} in ${delay}ms`)
+  mastraRestartTimer = setTimeout(() => {
+    mastraRestartTimer = null
+    const options = mastraLaunchOptions
+
+    if (!options) {return}
+    void launchMastraBackend(options).catch(error => {
+      rememberLog(`[mastra] restart attempt failed: ${error?.message || error}`)
+
+      if (mastraProcess) {
+        const child = mastraProcess
+        mastraProcess = null
+        stopBackendChild(child)
+      }
+
+      scheduleMastraRestart()
+    })
+  }, delay)
+}
+
+async function launchMastraBackend(options: {
   hermesRoot: string
   hermesBaseUrl: string
   hermesApiKey: string
   profile?: string | null
 }) {
-  stopMastraBackend()
+  const jwtSecret = crypto.randomBytes(32).toString('base64url')
 
   const spec = buildMastraSpawnSpec({
     ...options,
     hermesHome: HERMES_HOME,
-    jwtSecret: crypto.randomBytes(32).toString('base64url'),
+    ...(app.isPackaged ? { mastraDirectory: path.join(process.resourcesPath, 'mastra') } : {}),
+    jwtSecret,
     instanceId: crypto.randomBytes(16).toString('hex'),
     environment: process.env
   })
@@ -1187,6 +1310,9 @@ async function startMastraBackend(options: {
     }
 
     rememberLog(`[mastra] orchestration service exited (${signal || code})`)
+    mastraControl.detach({ reason: `Mastra exited unexpectedly (${signal || code}). Restarting with bounded backoff.` })
+    void broadcastMastraStatus()
+    scheduleMastraRestart()
   })
 
   await waitForMastraReady({
@@ -1195,7 +1321,27 @@ async function startMastraBackend(options: {
     expectedInstanceId: spec.instanceId
   })
 
+  mastraControl.attach({ baseUrl: spec.baseUrl, instanceId: spec.instanceId, jwtSecret })
+  void broadcastMastraStatus()
+  scheduleMastraPoll()
   rememberLog('[mastra] orchestration service is ready')
+
+  if (mastraStableTimer) {clearTimeout(mastraStableTimer)}
+  mastraStableTimer = setTimeout(() => {
+    mastraStableTimer = null
+    mastraRestartBudget.reset()
+  }, 60_000)
+}
+
+async function startMastraBackend(options: {
+  hermesRoot: string
+  hermesBaseUrl: string
+  hermesApiKey: string
+  profile?: string | null
+}) {
+  stopMastraBackend()
+  mastraLaunchOptions = { ...options }
+  await launchMastraBackend(options)
 }
 
 const remoteLiveness = new RemoteLivenessTracker()
@@ -9163,6 +9309,11 @@ async function startHermes() {
     })
 
     if (setup.kind === 'remote') {
+      stopMastraBackend({
+        mode: 'remote',
+        reason: 'Local Mastra orchestration is unavailable for remote Hermes profiles.'
+      })
+
       return setup.connection
     }
 
@@ -10648,6 +10799,52 @@ function createWindow() {
 }
 
 ipcMain.handle('hermes:connection', async (_event, profile) => ensureBackend(profile))
+ipcMain.handle('hermes:mastra:status', async () => mastraControl.getStatus())
+ipcMain.handle('hermes:mastra:runs:list', async (_event, request) => mastraControl.listRuns(request || {}))
+ipcMain.handle('hermes:mastra:runs:get', async (_event, runId) => mastraControl.getRun(String(runId || '')))
+ipcMain.handle('hermes:mastra:runs:start', async (_event, input) => {
+  const run = await mastraControl.startRun(input)
+  trackMastraRun(run)
+  scheduleMastraPoll()
+
+  return run
+})
+ipcMain.handle('hermes:mastra:runs:approval', async (_event, input) => {
+  const run = await mastraControl.resolveApproval(input)
+  trackMastraRun(run)
+  scheduleMastraPoll()
+
+  return run
+})
+ipcMain.handle('hermes:mastra:runs:cancel', async (_event, input) => {
+  const run = await mastraControl.cancelRun(input)
+  trackMastraRun(run)
+  scheduleMastraPoll()
+
+  return run
+})
+ipcMain.handle('hermes:mastra:runs:retry', async (_event, input) => {
+  const run = await mastraControl.retryRun(input)
+  trackMastraRun(run)
+  scheduleMastraPoll()
+
+  return run
+})
+ipcMain.on('hermes:mastra:events:subscribe', event => {
+  mastraEventSubscribers.set(event.sender.id, event.sender)
+  event.sender.once('destroyed', () => mastraEventSubscribers.delete(event.sender.id))
+  void mastraControl.getStatus().then(status => {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('hermes:mastra:event', { type: 'runtime-status', cursor: mastraEventCursor || '', status })
+    }
+  })
+  scheduleMastraPoll()
+})
+ipcMain.on('hermes:mastra:events:unsubscribe', event => {
+  mastraEventSubscribers.delete(event.sender.id)
+
+  if (!mastraEventSubscribers.size && !mastraHasActiveRuns()) {stopMastraPolling()}
+})
 // Reconnect-after-wake recovery. A REMOTE primary backend has no child process,
 // so the 'exit'/'error' handlers that would clear a dead connection promise never
 // fire — once the remote becomes unreachable across a sleep/wake the renderer

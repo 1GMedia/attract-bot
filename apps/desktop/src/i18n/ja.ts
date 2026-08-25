@@ -3,6 +3,19 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import { defineLocale } from './define-locale'
 
 export const ja = defineLocale({
+  runs: {
+    title: '実行',
+    subtitle: 'Mastra のオーケストレーション、承認、証拠、復旧',
+    compactSubtitle: '進行中および承認待ちのワークフロー',
+    newRun: '新規実行',
+    start: '実行開始',
+    noRuns: 'この表示に一致する実行はありません。',
+    noActiveRuns: '進行中または承認待ちの実行はありません。',
+    approve: '承認',
+    decline: '拒否',
+    cancel: '実行をキャンセル',
+    retry: '新規実行として再試行'
+  },
   common: {
     apply: '適用',
     back: '戻る',
@@ -1687,6 +1700,7 @@ export const ja = defineLocale({
   sidebar: {
     nav: {
       'new-session': '新しいセッション',
+      runs: '実行',
       skills: 'スキルとツール',
       messaging: 'メッセージング',
       artifacts: 'アーティファクト',

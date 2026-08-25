@@ -43,6 +43,7 @@ import { $desktopBoot } from '@/store/boot'
 import { requestVoiceConversationStart } from '@/store/composer'
 import { $cronReviewRequest, setCronFocusJobId } from '@/store/cron'
 import { $pinnedSessionIds, pinSession, restoreWorktree, unpinSession } from '@/store/layout'
+import { initMastraRuns } from '@/store/mastra-runs'
 import { $previewTarget } from '@/store/preview'
 import {
   $activeGatewayProfile,
@@ -181,6 +182,8 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   const billingSettingsRequest = useStore($billingSettingsRequest)
   const cronReviewRequest = useStore($cronReviewRequest)
   const currentCwd = useStore($currentCwd)
+
+  useEffect(() => initMastraRuns(), [])
 
   useEffect(() => {
     if (!botProduct) {

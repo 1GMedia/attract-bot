@@ -71,6 +71,7 @@ import {
   toggleSidebarMessagingOpen,
   unpinSession
 } from '@/store/layout'
+import { $activeMastraRuns, $mastraApprovalRuns } from '@/store/mastra-runs'
 import {
   $newChatProfile,
   $profileColors,
@@ -129,6 +130,7 @@ import {
   ARTIFACTS_ROUTE,
   CRON_ROUTE,
   MESSAGING_ROUTE,
+  RUNS_ROUTE,
   SIDEBAR_NAV_AREA,
   type SidebarNavContribution,
   SKILLS_ROUTE
@@ -183,6 +185,12 @@ const SIDEBAR_NAV: SidebarNavItem[] = [
     icon: props => <Codicon name="robot" {...props} />,
     action: 'new-session',
     keybindActionId: 'session.new'
+  },
+  {
+    id: 'runs',
+    label: '',
+    icon: props => <Codicon name="pulse" {...props} />,
+    route: RUNS_ROUTE
   },
   {
     id: 'skills',
@@ -307,6 +315,8 @@ export function ChatSidebar({
   // Contributed nav rows (plugins pairing a page with a sidebar entry) render
   // below the built-ins with the same chrome; active = at their route.
   const navContributions = useContributions(SIDEBAR_NAV_AREA)
+  const activeMastraRuns = useStore($activeMastraRuns)
+  const mastraApprovalRuns = useStore($mastraApprovalRuns)
 
   const contributedNav = useMemo<SidebarNavItem[]>(
     () =>
@@ -1427,6 +1437,7 @@ export function ChatSidebar({
                   (item.id === 'skills' && currentView === 'skills') ||
                   (item.id === 'messaging' && currentView === 'messaging') ||
                   (item.id === 'artifacts' && currentView === 'artifacts') ||
+                  (item.id === 'runs' && currentView === 'runs') ||
                   (item.id === 'cron' && currentView === 'cron') ||
                   // Contributed rows light up at their own route.
                   (Boolean(item.route) && pathname === item.route)
@@ -1474,6 +1485,18 @@ export function ChatSidebar({
                   >
                     <item.icon className="size-4 shrink-0 text-[color-mix(in_srgb,currentColor_72%,transparent)]" />
                     <span className="min-w-0 flex-1 truncate">{s.nav[item.id] ?? item.label}</span>
+                    {item.id === 'runs' && activeMastraRuns.length > 0 ? (
+                      <span
+                        className={cn(
+                          'ml-auto min-w-4 rounded-full px-1 text-center text-[0.58rem] leading-4 tabular-nums',
+                          mastraApprovalRuns.length > 0
+                            ? 'bg-primary/15 text-(--ui-text-primary)'
+                            : 'bg-(--ui-control-active-background) text-(--ui-text-tertiary)'
+                        )}
+                      >
+                        {activeMastraRuns.length}
+                      </span>
+                    ) : null}
                     {isNewSession && (
                       <KbdGroup
                         className={cn('ml-auto opacity-55', newSessionKbdFlash && 'opacity-100!')}

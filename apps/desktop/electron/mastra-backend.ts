@@ -8,6 +8,7 @@ export interface MastraSpawnSpec {
   cwd: string
   env: NodeJS.ProcessEnv
   healthUrl: string
+  baseUrl: string
   instanceId: string
 }
 
@@ -30,6 +31,7 @@ export function resolveManagedNode(
 
 export function buildMastraSpawnSpec(options: {
   hermesRoot: string
+  mastraDirectory?: string
   hermesHome: string
   hermesBaseUrl: string
   hermesApiKey: string
@@ -40,10 +42,20 @@ export function buildMastraSpawnSpec(options: {
   platform?: NodeJS.Platform
   exists?: (candidate: string) => boolean
 }): MastraSpawnSpec {
-  const mastraDirectory = path.join(options.hermesRoot, 'apps', 'mastra')
+  const mastraDirectory = options.mastraDirectory || path.join(options.hermesRoot, 'apps', 'mastra')
   const output = path.join(mastraDirectory, '.mastra', 'output', 'index.mjs')
   const studio = path.join(mastraDirectory, '.mastra', 'output', 'studio')
   const exists = options.exists || fs.existsSync
+
+  const knowledgeSources = [
+    path.join(options.hermesRoot, 'AGENTS.md'),
+    path.join(options.hermesRoot, 'README.md'),
+    path.join(options.hermesRoot, 'docs', 'bot-product-release-scope.md'),
+    path.join(options.hermesRoot, 'docs', 'profile-routing.md'),
+    path.join(options.hermesRoot, 'docs', 'relay-connector-contract.md'),
+    path.join(options.hermesRoot, 'docs', 'session-lifecycle.md'),
+    path.join(options.hermesRoot, 'docs', 'upstream-hermes-agent.md')
+  ].filter(exists)
 
   if (!exists(output)) {
     throw new Error(`Mastra build output is missing at ${output}`)
@@ -53,6 +65,7 @@ export function buildMastraSpawnSpec(options: {
     command: resolveManagedNode(options.hermesHome, options.environment, options.platform, exists),
     args: [output],
     cwd: mastraDirectory,
+    baseUrl: 'http://127.0.0.1:4112',
     healthUrl: 'http://127.0.0.1:4112/korgo/health',
     instanceId: options.instanceId,
     env: {
@@ -63,7 +76,9 @@ export function buildMastraSpawnSpec(options: {
       KORGO_MASTRA_PORT: '4112',
       KORGO_MASTRA_JWT_SECRET: options.jwtSecret,
       KORGO_MASTRA_INSTANCE_ID: options.instanceId,
-      MASTRA_STUDIO_PATH: studio
+      KORGO_MASTRA_KNOWLEDGE_SOURCES: knowledgeSources.join(path.delimiter),
+      KORGO_MASTRA_WORKSPACE_ID: options.hermesRoot,
+      ...(exists(studio) ? { MASTRA_STUDIO_PATH: studio } : {})
     }
   }
 }
@@ -87,7 +102,7 @@ export async function waitForMastraReady(options: {
       const response = await fetchImplementation(options.healthUrl, { signal: AbortSignal.timeout(1_000) })
 
       if (response.ok) {
-        const body = await response.json() as { instanceId?: unknown; ok?: unknown; service?: unknown }
+        const body = (await response.json()) as { instanceId?: unknown; ok?: unknown; service?: unknown }
 
         if (
           body.ok === true &&

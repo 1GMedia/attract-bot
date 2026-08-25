@@ -1,4 +1,15 @@
 import type { GatewayWsUrlResult } from '@hermes/shared'
+import type {
+  MastraListRunsRequest,
+  MastraListRunsResponse,
+  MastraResolveApprovalInput,
+  MastraRunDetail,
+  MastraRunEvent,
+  MastraRunMutation,
+  MastraRunSummary,
+  MastraRuntimeStatus,
+  MastraStartRunInput
+} from '@hermes/shared/mastra-runs'
 
 import type { WakeIndicatorState } from './lib/wake-indicator'
 import type {
@@ -182,6 +193,16 @@ declare global {
         // backend under the new HERMES_HOME (reloads the window). Pass null to
         // clear the preference.
         set: (name: string | null) => Promise<DesktopActiveProfile>
+      }
+      mastra: {
+        getStatus: () => Promise<MastraRuntimeStatus>
+        listRuns: (request?: MastraListRunsRequest) => Promise<MastraListRunsResponse>
+        getRun: (runId: string) => Promise<MastraRunDetail>
+        startRun: (input: MastraStartRunInput) => Promise<MastraRunSummary>
+        resolveApproval: (input: MastraResolveApprovalInput) => Promise<MastraRunSummary>
+        cancelRun: (input: MastraRunMutation) => Promise<MastraRunSummary>
+        retryRun: (input: MastraRunMutation) => Promise<MastraRunSummary>
+        onEvent: (callback: (event: MastraRunEvent) => void) => () => void
       }
       api: <T>(request: HermesApiRequest) => Promise<T>
       notify: (payload: HermesNotification) => Promise<boolean>
