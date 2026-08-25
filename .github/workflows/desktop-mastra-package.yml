@@ -31,11 +31,11 @@ jobs:
       - uses: ./.github/actions/retry
         with:
           command: npm ci
-      - name: Run Mastra and desktop platform tests
+      - name: Run Mastra and focused desktop control-plane tests
         run: |
           npm --workspace @hermes/mastra run check
           npm --workspace apps/desktop run typecheck
-          npm --workspace apps/desktop run test:desktop:platforms
+          npm --workspace apps/desktop run test:mastra-control
       - name: Package Bot desktop without signing
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

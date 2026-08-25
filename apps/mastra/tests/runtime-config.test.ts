@@ -8,14 +8,16 @@ describe('Mastra runtime configuration', () => {
     expect(config.port).toBe(4112)
     expect(config.instanceId).toBe('standalone')
     expect(config.hermes.baseUrl).toBe('http://127.0.0.1:8642')
-    expect(config.dataDirectory).toContain('Library/Application Support/Hermes Bots/Mastra')
+    expect(config.dataDirectory.replaceAll('\\', '/')).toContain('Library/Application Support/Hermes Bots/Mastra')
   })
 
   it('uses platform-native durable data directories on Windows and Linux', () => {
     expect(
       createRuntimeConfig({ LOCALAPPDATA: 'C:\\Users\\tester\\AppData\\Local' }, 'C:\\Users\\tester', 'win32')
         .dataDirectory
-    ).toContain('AppData\\Local/Hermes Bots/Mastra')
+    ).toSatisfy((directory: string) =>
+      directory.replaceAll('\\', '/').includes('AppData/Local/Hermes Bots/Mastra')
+    )
     expect(createRuntimeConfig({ XDG_DATA_HOME: '/var/data/tester' }, '/home/tester', 'linux').dataDirectory).toBe(
       '/var/data/tester/hermes-bots/mastra'
     )

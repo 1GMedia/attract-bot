@@ -56,6 +56,7 @@
     "test:desktop:all": "node scripts/test-desktop.mjs all",
     "test:desktop:dmg": "node scripts/test-desktop.mjs dmg",
     "test:desktop:nsis": "node scripts/test-desktop.mjs nsis",
+    "test:mastra-control": "vitest run --project electron electron/mastra-backend.test.ts electron/mastra-control.test.ts electron/mastra-restart.test.ts",
     "test:desktop:existing": "node scripts/test-desktop.mjs existing",
     "test:desktop:fresh": "node scripts/test-desktop.mjs fresh",
     "typecheck": "tsc -p . --noEmit && tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
