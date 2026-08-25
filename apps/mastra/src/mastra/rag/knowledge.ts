@@ -1,0 +1,56 @@
+import { createHash } from "node:crypto";
+import { fastembed } from "@mastra/fastembed";
+import { MDocument, createVectorQueryTool } from "@mastra/rag";
+import { knowledgeVectorStore } from "../storage.ts";
+
+export const KNOWLEDGE_INDEX = "hermes-knowledge";
+
+export const queryHermesKnowledgeTool = createVectorQueryTool({
+  id: "query-hermes-knowledge",
+  description: "Search approved Hermes Bot operating knowledge and project context.",
+  vectorStore: knowledgeVectorStore,
+  indexName: KNOWLEDGE_INDEX,
+  model: fastembed.small,
+  includeSources: true,
+});
+
+export async function ingestKnowledgeDocument(input: {
+  sourceId: string;
+  text: string;
+  metadata?: Record<string, string | number | boolean>;
+}): Promise<{ sourceId: string; chunkCount: number }> {
+  const document = MDocument.fromMarkdown(input.text, {
+    ...input.metadata,
+    sourceId: input.sourceId,
+  });
+  const chunks = await document.chunk({ strategy: "recursive", maxSize: 1_200, overlap: 160 });
+  const texts = chunks.map((chunk) => chunk.getText());
+  if (!texts.length) return { sourceId: input.sourceId, chunkCount: 0 };
+
+  const { embeddings } = await fastembed.small.doEmbed({ values: texts });
+  const indexes = await knowledgeVectorStore.listIndexes();
+  if (!indexes.includes(KNOWLEDGE_INDEX)) {
+    await knowledgeVectorStore.createIndex({
+      indexName: KNOWLEDGE_INDEX,
+      dimension: embeddings[0].length,
+      metric: "cosine",
+    });
+  }
+
+  await knowledgeVectorStore.upsert({
+    indexName: KNOWLEDGE_INDEX,
+    vectors: embeddings,
+    ids: texts.map((text, index) => createHash("sha256")
+      .update(`${input.sourceId}\0${index}\0${text}`)
+      .digest("hex")),
+    metadata: chunks.map((chunk, index) => ({
+      ...chunk.metadata,
+      sourceId: input.sourceId,
+      text: texts[index],
+      chunkIndex: index,
+    })),
+    deleteFilter: { sourceId: input.sourceId },
+  });
+
+  return { sourceId: input.sourceId, chunkCount: chunks.length };
+}
