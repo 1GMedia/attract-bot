@@ -163,6 +163,7 @@ import { createHudSnapShortcut } from './hud-snap-shortcut'
 import { buildHudWindowUrl } from './hud-url'
 import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle } from './link-title-window'
 import { ensureMainWindow } from './main-window-lifecycle'
+import { buildMastraSpawnSpec, waitForMastraReady } from './mastra-backend'
 import {
   oauthGuardMayHardFail,
   oauthSessionIsLive,
@@ -1140,6 +1141,63 @@ function registerMediaProtocol() {
 
 let mainWindow = null
 const backendConnectionState = createBackendConnectionState<ReturnType<typeof spawn>, any>()
+let mastraProcess: ReturnType<typeof spawn> | null = null
+
+function stopMastraBackend() {
+  const child = mastraProcess
+  mastraProcess = null
+
+  if (child && !child.killed) {
+    stopBackendChild(child)
+  }
+}
+
+async function startMastraBackend(options: {
+  hermesRoot: string
+  hermesBaseUrl: string
+  hermesApiKey: string
+  profile?: string | null
+}) {
+  stopMastraBackend()
+
+  const spec = buildMastraSpawnSpec({
+    ...options,
+    hermesHome: HERMES_HOME,
+    jwtSecret: crypto.randomBytes(32).toString('base64url'),
+    instanceId: crypto.randomBytes(16).toString('hex'),
+    environment: process.env
+  })
+
+  const child = spawn(
+    spec.command,
+    spec.args,
+    hiddenWindowsChildOptions({
+      cwd: spec.cwd,
+      env: spec.env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+  )
+
+  mastraProcess = child
+  child.stdout?.on('data', data => rememberLog(`[mastra] ${String(data).trimEnd()}`))
+  child.stderr?.on('data', data => rememberLog(`[mastra] ${String(data).trimEnd()}`))
+  child.once('exit', (code, signal) => {
+    if (mastraProcess === child) {
+      mastraProcess = null
+    }
+
+    rememberLog(`[mastra] orchestration service exited (${signal || code})`)
+  })
+
+  await waitForMastraReady({
+    healthUrl: spec.healthUrl,
+    child,
+    expectedInstanceId: spec.instanceId
+  })
+
+  rememberLog('[mastra] orchestration service is ready')
+}
+
 const remoteLiveness = new RemoteLivenessTracker()
 const remoteRevalidation = new RemoteRevalidationCoordinator()
 // True while connection-config:apply soft-rehomes the primary — suppresses the
@@ -8546,6 +8604,7 @@ function resetHermesConnection({ soft = false } = {}) {
   remoteReauthFailure = null
   remoteLiveness.clear()
   const hermesProcess = backendConnectionState.invalidate()
+  stopMastraBackend()
   stopBackendChild(hermesProcess)
 
   if (!soft) {
@@ -9068,6 +9127,7 @@ async function startHermes() {
     // Resolve for the desktop's primary profile so a per-profile remote
     // override on the active profile is honored (falls back to env / global).
     const token = crypto.randomBytes(32).toString('base64url')
+    const mastraHermesApiKey = crypto.randomBytes(32).toString('base64url')
     // --port 0: the OS assigns an ephemeral port; the child announces it on stdout.
     const backendArgs = ['serve', '--host', '127.0.0.1', '--port', '0']
     // Pin the desktop's chosen profile via the global --profile flag. This is
@@ -9136,6 +9196,10 @@ async function startHermes() {
           ...orgoBackendEnv(activeProfile || 'default'),
           TERMINAL_CWD: hermesCwd,
           HERMES_DASHBOARD_SESSION_TOKEN: token,
+          // Private machine-to-machine credential shared only with the local
+          // Mastra child. It is never returned in renderer connection IPC or
+          // persisted to disk.
+          API_SERVER_KEY: mastraHermesApiKey,
           // Marks this dashboard backend as desktop-spawned so it runs the cron
           // scheduler tick loop (the gateway isn't running under the app).
           HERMES_DESKTOP: '1',
@@ -9200,6 +9264,7 @@ async function startHermes() {
         return
       }
 
+      stopMastraBackend()
       rememberLog(`Hermes backend exited (${signal || code})`)
       sendBackendExit({ code, signal })
 
@@ -9253,6 +9318,20 @@ async function startHermes() {
       throw new Error(
         `Local Hermes backend is HTTP-reachable but the WebSocket (/api/ws) rejected the session token: ${wsProbe.reason}`
       )
+    }
+
+    try {
+      await startMastraBackend({
+        hermesRoot: backend.root || hermesCwd,
+        hermesBaseUrl: baseUrl,
+        hermesApiKey: mastraHermesApiKey,
+        profile: activeProfile
+      })
+    } catch (error) {
+      // Keep the Hermes shell recoverable during the staged Mastra rollout,
+      // but make the missing backbone explicit in diagnostics.
+      stopMastraBackend()
+      rememberLog(`[mastra] orchestration service unavailable: ${error?.message || error}`)
     }
 
     updateBootProgress({
@@ -13411,6 +13490,7 @@ app.on('before-quit', event => {
     disposeTerminalSession(id)
   }
 
+  stopMastraBackend()
   stopBackendChild(backendConnectionState.getProcess())
   stopAllPoolBackends()
 })
