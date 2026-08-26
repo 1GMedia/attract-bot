@@ -98,6 +98,7 @@ const secret = keyedPromptStore<SecretRequest>()
 const $approvalInlineAnchors = atom<Record<string, number>>({})
 
 export const $approvalRequest = approval.$active
+export const $approvalRequests = approval.$all
 export const setApprovalRequest = approval.set
 export const clearApprovalRequest = approval.clear
 

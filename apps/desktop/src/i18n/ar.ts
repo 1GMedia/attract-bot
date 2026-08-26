@@ -1,6 +1,19 @@
 import { defineLocale } from './define-locale'
 
 export const ar = defineLocale({
+  runs: {
+    title: 'عمليات التشغيل',
+    subtitle: 'تنسيق Mastra والموافقات والأدلة والاسترداد',
+    compactSubtitle: 'سير العمل النشط أو المنتظر للموافقة',
+    newRun: 'تشغيل جديد',
+    start: 'بدء التشغيل',
+    noRuns: 'لا توجد عمليات تشغيل مطابقة لهذا العرض.',
+    noActiveRuns: 'لا توجد عمليات نشطة أو منتظرة للموافقة.',
+    approve: 'موافقة',
+    decline: 'رفض',
+    cancel: 'إلغاء التشغيل',
+    retry: 'إعادة المحاولة كتشغيل جديد'
+  },
   common: {
     apply: 'تطبيق',
     back: 'رجوع',
@@ -1540,6 +1553,7 @@ export const ar = defineLocale({
   sidebar: {
     nav: {
       'new-session': 'جلسة جديدة',
+      runs: 'عمليات التشغيل',
       skills: 'المهارات',
       messaging: 'المراسلة',
       artifacts: 'العناصر',

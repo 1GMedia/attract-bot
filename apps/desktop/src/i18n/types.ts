@@ -91,6 +91,47 @@ export interface Translations {
     off: string
   }
 
+  runs: {
+    title: string
+    subtitle: string
+    compactSubtitle: string
+    newRun: string
+    taskId: string
+    workspace: string
+    profile: string
+    instructions: string
+    start: string
+    starting: string
+    allStates: string
+    noRuns: string
+    noActiveRuns: string
+    unavailable: string
+    active: string
+    approvals: string
+    history: string
+    detail: string
+    steps: string
+    evidence: string
+    output: string
+    trace: string
+    score: string
+    usage: string
+    parentRun: string
+    error: string
+    approve: string
+    decline: string
+    cancel: string
+    retry: string
+    openInSplit: string
+    openArtifact: string
+    refresh: string
+    capabilities: string
+    knowledge: string
+    requested: string
+    selectRun: string
+    states: Record<string, string>
+  }
+
   fileMenu: {
     revealFinder: string
     revealExplorer: string

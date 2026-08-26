@@ -20,9 +20,9 @@ import { AlertCircle, ChevronDown, Loader2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { $gateway } from '@/store/gateway'
 import { notifyError } from '@/store/notifications'
+import { resolveOperatorApproval } from '@/store/operator-approvals'
 import {
   type ApprovalRequest,
-  clearApprovalRequest,
   registerApprovalInlineAnchor,
   sessionApprovalInlineVisible,
   sessionApprovalRequest
@@ -142,18 +142,18 @@ const ApprovalBar: FC<{ request: ApprovalRequest; surface: 'floating' | 'inline'
       setSubmitting(choice)
 
       try {
-        await gateway.request<{ resolved?: boolean }>('approval.respond', {
-          choice,
-          session_id: request.sessionId ?? undefined
-        })
+        await resolveOperatorApproval(
+          { id: `hermes:${request.sessionId ?? ''}`, request, source: 'hermes-tool' },
+          choice === 'once' ? 'approve' : choice === 'deny' ? 'decline' : choice,
+          gateway
+        )
         triggerHaptic(choice === 'deny' ? 'cancel' : 'submit')
-        clearApprovalRequest(request.sessionId)
       } catch (error) {
         notifyError(error, copy.sendFailed)
         setSubmitting(null)
       }
     },
-    [busy, copy.gatewayDisconnected, copy.sendFailed, gateway, request.sessionId]
+    [busy, copy.gatewayDisconnected, copy.sendFailed, gateway, request]
   )
 
   // ⌘/Ctrl+Enter → Run, Esc → Reject.

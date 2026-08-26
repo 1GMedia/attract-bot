@@ -172,6 +172,25 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
     get: () => ipcRenderer.invoke('hermes:profile:get'),
     set: name => ipcRenderer.invoke('hermes:profile:set', name)
   },
+  mastra: {
+    getStatus: () => ipcRenderer.invoke('hermes:mastra:status'),
+    listRuns: request => ipcRenderer.invoke('hermes:mastra:runs:list', request),
+    getRun: runId => ipcRenderer.invoke('hermes:mastra:runs:get', runId),
+    startRun: input => ipcRenderer.invoke('hermes:mastra:runs:start', input),
+    resolveApproval: input => ipcRenderer.invoke('hermes:mastra:runs:approval', input),
+    cancelRun: input => ipcRenderer.invoke('hermes:mastra:runs:cancel', input),
+    retryRun: input => ipcRenderer.invoke('hermes:mastra:runs:retry', input),
+    onEvent: callback => {
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on('hermes:mastra:event', listener)
+      ipcRenderer.send('hermes:mastra:events:subscribe')
+
+      return () => {
+        ipcRenderer.removeListener('hermes:mastra:event', listener)
+        ipcRenderer.send('hermes:mastra:events:unsubscribe')
+      }
+    }
+  },
   api: request => ipcRenderer.invoke('hermes:api', request),
   notify: payload => ipcRenderer.invoke('hermes:notify', payload),
   requestMicrophoneAccess: () => ipcRenderer.invoke('hermes:requestMicrophoneAccess'),

@@ -97,6 +97,7 @@ import {
   navigateToWorkspacePage,
   NEW_CHAT_ROUTE,
   PROFILES_ROUTE,
+  RUNS_ROUTE,
   SETTINGS_ROUTE,
   SKILLS_ROUTE,
   STARMAP_ROUTE
@@ -793,6 +794,13 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             id: 'nav-artifacts',
             label: cc.nav.artifacts.title,
             run: go(ARTIFACTS_ROUTE)
+          },
+          {
+            icon: Activity,
+            id: 'nav-runs',
+            keywords: ['runs', 'workflow', 'approvals', 'evidence', 'mastra'],
+            label: t.runs.title,
+            run: go(RUNS_ROUTE)
           },
           {
             action: 'nav.cron',

@@ -45,6 +45,55 @@ export const en: Translations = {
     off: 'Off'
   },
 
+  runs: {
+    title: 'Runs',
+    subtitle: 'Mastra orchestration, approvals, evidence, and recovery',
+    compactSubtitle: 'Active and approval-blocked workflows',
+    newRun: 'New run',
+    taskId: 'Task ID',
+    workspace: 'Workspace',
+    profile: 'Hermes profile',
+    instructions: 'Instructions',
+    start: 'Start run',
+    starting: 'Starting…',
+    allStates: 'All states',
+    noRuns: 'No workflow runs match this view.',
+    noActiveRuns: 'No active or approval-blocked runs.',
+    unavailable: 'Mastra is unavailable',
+    active: 'Active',
+    approvals: 'Approvals',
+    history: 'History',
+    detail: 'Run detail',
+    steps: 'Workflow steps',
+    evidence: 'Evidence',
+    output: 'Sanitized output',
+    trace: 'Trace ID',
+    score: 'Evidence score',
+    usage: 'Usage',
+    parentRun: 'Retried from',
+    error: 'Structured error',
+    approve: 'Approve',
+    decline: 'Decline',
+    cancel: 'Cancel run',
+    retry: 'Retry as new run',
+    openInSplit: 'Open activity rail',
+    openArtifact: 'Open evidence',
+    refresh: 'Refresh runs',
+    capabilities: 'Verified capabilities',
+    knowledge: 'Knowledge',
+    requested: 'Requested',
+    selectRun: 'Select a run to inspect its evidence and recovery controls.',
+    states: {
+      'awaiting-approval': 'Awaiting approval',
+      cancelled: 'Cancelled',
+      failed: 'Failed',
+      preparing: 'Preparing',
+      queued: 'Queued',
+      running: 'Running',
+      succeeded: 'Succeeded'
+    }
+  },
+
   fileMenu: {
     revealFinder: 'Reveal in Finder',
     revealExplorer: 'Reveal in File Explorer',
@@ -1907,6 +1956,7 @@ export const en: Translations = {
   sidebar: {
     nav: {
       'new-session': 'New session',
+      runs: 'Runs',
       skills: 'Capabilities',
       messaging: 'Messaging',
       artifacts: 'Artifacts',

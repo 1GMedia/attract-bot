@@ -3,6 +3,54 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import type { Translations } from './types'
 
 export const zh: Translations = {
+  runs: {
+    title: '运行',
+    subtitle: 'Mastra 编排、审批、证据与恢复',
+    compactSubtitle: '活动及等待审批的工作流',
+    newRun: '新建运行',
+    taskId: '任务 ID',
+    workspace: '工作区',
+    profile: 'Hermes 配置',
+    instructions: '指令',
+    start: '开始运行',
+    starting: '正在启动…',
+    allStates: '所有状态',
+    noRuns: '没有符合当前视图的工作流运行。',
+    noActiveRuns: '没有活动或等待审批的运行。',
+    unavailable: 'Mastra 不可用',
+    active: '活动',
+    approvals: '审批',
+    history: '历史',
+    detail: '运行详情',
+    steps: '工作流步骤',
+    evidence: '证据',
+    output: '已清理输出',
+    trace: '跟踪 ID',
+    score: '证据评分',
+    usage: '用量',
+    parentRun: '重试来源',
+    error: '结构化错误',
+    approve: '批准',
+    decline: '拒绝',
+    cancel: '取消运行',
+    retry: '作为新运行重试',
+    openInSplit: '打开活动侧栏',
+    openArtifact: '打开证据',
+    refresh: '刷新运行',
+    capabilities: '已验证能力',
+    knowledge: '知识',
+    requested: '请求时间',
+    selectRun: '选择一个运行以查看证据和恢复控制。',
+    states: {
+      'awaiting-approval': '等待审批',
+      cancelled: '已取消',
+      failed: '失败',
+      preparing: '准备中',
+      queued: '已排队',
+      running: '运行中',
+      succeeded: '成功'
+    }
+  },
   common: {
     apply: '应用',
     back: '返回',
@@ -2098,6 +2146,7 @@ export const zh: Translations = {
   sidebar: {
     nav: {
       'new-session': '新建会话',
+      runs: '运行',
       skills: '技能与工具',
       messaging: '消息平台',
       artifacts: '产物',

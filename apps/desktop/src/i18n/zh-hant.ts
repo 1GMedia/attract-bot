@@ -3,6 +3,19 @@ import { defineFieldCopy } from '@/app/settings/field-copy'
 import { defineLocale } from './define-locale'
 
 export const zhHant = defineLocale({
+  runs: {
+    title: '執行',
+    subtitle: 'Mastra 編排、核准、證據與復原',
+    compactSubtitle: '進行中及等待核准的工作流程',
+    newRun: '新增執行',
+    start: '開始執行',
+    noRuns: '沒有符合目前檢視的工作流程執行。',
+    noActiveRuns: '沒有進行中或等待核准的執行。',
+    approve: '核准',
+    decline: '拒絕',
+    cancel: '取消執行',
+    retry: '作為新執行重試'
+  },
   common: {
     apply: '套用',
     back: '返回',
@@ -1632,6 +1645,7 @@ export const zhHant = defineLocale({
   sidebar: {
     nav: {
       'new-session': '新工作階段',
+      runs: '執行',
       skills: '技能與工具',
       messaging: '訊息平台',
       artifacts: '成品',

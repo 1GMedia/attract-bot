@@ -58,6 +58,12 @@ Setup does not delete `~/.hermes`, create cloud resources, or save credentials. 
 
 The installed product keeps the stable bundle identifier and legacy `Hermes Bots` Application Support directory so existing users retain credentials, permissions, and local state across the Korgo Bot rebrand.
 
+On Windows, run the repository's PowerShell installer from an elevated terminal when a desktop build is required:
+
+```powershell
+.\scripts\install.ps1 -IncludeDesktop
+```
+
 ### Build a local macOS app
 
 From `apps/desktop`:
