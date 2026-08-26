@@ -18,6 +18,8 @@ The authenticated desktop adapter exposes stable message, turn, and run DTOs rat
 
 When an existing Bot Chat is upgraded, Electron main imports at most the latest 500 conversational Hermes messages into the same Mastra thread ID. The import excludes tool and system payloads, redacts sensitive text, uses stable Hermes row identities, and is idempotent across reconnects. Orgo Bot connections default to Mastra conversations; the Runs header exposes a connection-scoped direct-Hermes compatibility switch, and an enabled Mastra conversation fails closed if the supervisor is unavailable instead of silently changing execution paths.
 
+Packaged Bot releases include only the explicit application knowledge allowlist (`AGENTS.md`, `README.md`, and selected `docs/**`). Before the first remote turn or manually started run in a workspace, Electron main sends those sources through the authenticated tunnel with stable source IDs and SHA-256 hashes. Remote Mastra verifies the hashes, applies content-hash/version replacement semantics, and removes sources that are no longer approved; it never crawls the desktop filesystem.
+
 Useful commands from the repository root:
 
 ```bash

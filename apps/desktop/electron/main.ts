@@ -164,7 +164,7 @@ import { createHudSnapShortcut } from './hud-snap-shortcut'
 import { buildHudWindowUrl } from './hud-url'
 import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle } from './link-title-window'
 import { ensureMainWindow } from './main-window-lifecycle'
-import { buildMastraSpawnSpec, waitForMastraReady } from './mastra-backend'
+import { approvedKnowledgeSourcePaths, buildMastraSpawnSpec, waitForMastraReady } from './mastra-backend'
 import { MastraControlClient } from './mastra-control'
 import { mapHermesHistory } from './mastra-history'
 import { provisionRemoteMastra } from './mastra-remote'
@@ -1154,6 +1154,7 @@ const mastraKnownRunStates = new Map<string, string>()
 const mastraKnownTurnStates = new Map<string, string>()
 const mastraKnownMessageIds = new Set<string>()
 const mastraImportedThreads = new Set<string>()
+const mastraSyncedKnowledge = new Set<string>()
 let mastraEventCursor: string | undefined
 let mastraPollTimer: ReturnType<typeof setTimeout> | null = null
 let mastraPollInFlight = false
@@ -1254,6 +1255,7 @@ function stopMastraBackend(options: { mode?: 'local' | 'remote'; reason?: string
   mastraKnownTurnStates.clear()
   mastraKnownMessageIds.clear()
   mastraImportedThreads.clear()
+  mastraSyncedKnowledge.clear()
   stopMastraPolling()
 
   if (mastraRestartTimer) {clearTimeout(mastraRestartTimer)}
@@ -10910,7 +10912,33 @@ async function ensureMastraThreadHistory(input: any) {
   mastraImportedThreads.add(migrationKey)
 }
 
+async function ensureRemoteMastraKnowledge(workspaceIdValue: unknown) {
+  if (!mastraRemoteTunnel) {return}
+  const workspaceId = String(workspaceIdValue || '').trim()
+  if (!workspaceId) throw new Error('A workspace identity is required before syncing Orgo knowledge.')
+  const knowledgeRoot = app.isPackaged
+    ? path.join(process.resourcesPath, 'mastra-knowledge')
+    : path.resolve(APP_ROOT, '../..')
+  const sources = approvedKnowledgeSourcePaths(knowledgeRoot).map(sourcePath => {
+    const content = fs.readFileSync(sourcePath, 'utf8')
+    const logicalPath = path.relative(knowledgeRoot, sourcePath).split(path.sep).join('/')
+    return {
+      content,
+      contentHash: crypto.createHash('sha256').update(content).digest('hex'),
+      path: logicalPath,
+      sourceId: `${workspaceId}:${logicalPath}`
+    }
+  })
+  const identity = crypto.createHash('sha256')
+    .update(`${mastraControl.instanceId}\0${workspaceId}\0${sources.map(source => source.contentHash).join('\0')}`)
+    .digest('hex')
+  if (mastraSyncedKnowledge.has(identity)) {return}
+  await mastraControl.syncKnowledgeSources({ sources, workspaceId })
+  mastraSyncedKnowledge.add(identity)
+}
+
 ipcMain.handle('hermes:mastra:turns:start', async (_event, input) => {
+  await ensureRemoteMastraKnowledge(input?.workspaceId)
   await ensureMastraThreadHistory(input)
   const turn = await mastraControl.startTurn(input)
   trackMastraTurn(turn)
@@ -10928,6 +10956,7 @@ ipcMain.handle('hermes:mastra:turns:cancel', async (_event, input) => {
 ipcMain.handle('hermes:mastra:runs:list', async (_event, request) => mastraControl.listRuns(request || {}))
 ipcMain.handle('hermes:mastra:runs:get', async (_event, runId) => mastraControl.getRun(String(runId || '')))
 ipcMain.handle('hermes:mastra:runs:start', async (_event, input) => {
+  await ensureRemoteMastraKnowledge(input?.workspaceId)
   const run = await mastraControl.startRun(input)
   trackMastraRun(run)
   scheduleMastraPoll()

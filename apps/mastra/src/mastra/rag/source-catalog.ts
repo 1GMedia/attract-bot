@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, resolve } from 'node:path'
-import { ingestKnowledgeDocument } from './knowledge.ts'
+import { deleteKnowledgeDocument, ingestKnowledgeDocument } from './knowledge.ts'
 import { mastraRuntimeConfig } from '../runtime-config.ts'
 import { hashKnowledgeContent, nextKnowledgeVersion } from './source-version.ts'
 
@@ -82,6 +82,22 @@ export async function indexKnowledgeSource(input: {
     sources: [...catalog.sources.filter(source => source.sourceId !== input.sourceId), record]
   })
   return record
+}
+
+export async function replaceWorkspaceKnowledgeSources(
+  workspaceId: string,
+  keepSourceIds: string[]
+): Promise<void> {
+  const catalog = await readCatalog()
+  const keep = new Set(keepSourceIds)
+  const removed = catalog.sources.filter(source => source.workspaceId === workspaceId && !keep.has(source.sourceId))
+  for (const source of removed) await deleteKnowledgeDocument(source.sourceId)
+  if (!removed.length) return
+  const removedIds = new Set(removed.map(source => source.sourceId))
+  await writeCatalog({
+    version: 1,
+    sources: catalog.sources.filter(source => !removedIds.has(source.sourceId))
+  })
 }
 
 function configuredPaths(environment: NodeJS.ProcessEnv): string[] {

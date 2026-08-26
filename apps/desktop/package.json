@@ -237,6 +237,25 @@
       {
         "from": "../../hermes_cli/orgo_agent_mcp.py",
         "to": "orgo/orgo-agent-mcp.py"
+      },
+      {
+        "from": "../../AGENTS.md",
+        "to": "mastra-knowledge/AGENTS.md"
+      },
+      {
+        "from": "../../README.md",
+        "to": "mastra-knowledge/README.md"
+      },
+      {
+        "from": "../../docs",
+        "to": "mastra-knowledge/docs",
+        "filter": [
+          "bot-product-release-scope.md",
+          "profile-routing.md",
+          "relay-connector-contract.md",
+          "session-lifecycle.md",
+          "upstream-hermes-agent.md"
+        ]
       }
     ],
     "asar": true,

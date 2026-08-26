@@ -65,6 +65,21 @@ describe('Mastra desktop control client', () => {
     expect(JSON.parse(init.body)).toMatchObject({ instanceId: 'instance-a', threadId: 'chat-1' })
   })
 
+  it('binds remote knowledge sync to the active Mastra instance', async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({ sources: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })) as unknown as typeof fetch
+    const client = new MastraControlClient(fetchImplementation)
+    client.attach({ baseUrl: 'http://127.0.0.1:49112', instanceId: 'orgo-instance', jwtSecret: 'remote-jwt' })
+
+    await client.syncKnowledgeSources({ sources: [], workspaceId: '/workspace' })
+
+    const [url, init] = (fetchImplementation as any).mock.calls[0]
+    expect(url).toBe('http://127.0.0.1:49112/korgo/knowledge/sources')
+    expect(JSON.parse(init.body)).toEqual({ instanceId: 'orgo-instance', sources: [], workspaceId: '/workspace' })
+  })
+
   it('reports remote profiles as unavailable without attempting loopback access', async () => {
     const fetchImplementation = vi.fn() as unknown as typeof fetch
     const client = new MastraControlClient(fetchImplementation)

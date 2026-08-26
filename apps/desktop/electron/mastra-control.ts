@@ -209,6 +209,16 @@ export class MastraControlClient {
     })
   }
 
+  syncKnowledgeSources(input: {
+    sources: Array<{ content: string; contentHash: string; path: string; sourceId: string }>
+    workspaceId: string
+  }): Promise<{ sources: Array<{ contentHash: string; sourceId: string; version: number }> }> {
+    return this.mutate('/korgo/knowledge/sources', {
+      ...input,
+      instanceId: this.requireConnection().instanceId
+    })
+  }
+
   startTurn(input: MastraStartTurnInput): Promise<MastraTurnSummary> {
     return this.mutate('/korgo/turns', { ...input, instanceId: this.requireConnection().instanceId })
   }

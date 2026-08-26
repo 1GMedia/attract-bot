@@ -2,9 +2,23 @@ import path from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { buildMastraSpawnSpec, resolveManagedNode, waitForMastraReady } from './mastra-backend'
+import {
+  approvedKnowledgeSourcePaths,
+  buildMastraSpawnSpec,
+  resolveManagedNode,
+  waitForMastraReady
+} from './mastra-backend'
 
 describe('Mastra desktop backend', () => {
+  it('selects only the explicit application knowledge allowlist', () => {
+    const root = path.resolve('checkout')
+    const allowed = new Set([
+      path.join(root, 'AGENTS.md'),
+      path.join(root, 'docs', 'profile-routing.md')
+    ])
+    expect(approvedKnowledgeSourcePaths(root, candidate => allowed.has(candidate))).toEqual([...allowed])
+  })
+
   it('prefers the Hermes-managed Node runtime', () => {
     expect(resolveManagedNode('/hermes-home', {}, 'darwin', candidate => candidate.endsWith('/node/bin/node'))).toBe(
       '/hermes-home/node/bin/node'

@@ -6,6 +6,7 @@ import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mast
 import { hermesSupervisorAgent } from "./agents/hermes-supervisor.ts";
 import { hermesMastraMcpServer } from "./mcp/hermes-mcp.ts";
 import { indexConfiguredKnowledgeSources } from "./rag/source-catalog.ts";
+import { knowledgeApiRoutes } from "./rag/routes.ts";
 import { mastraRuntimeConfig } from "./runtime-config.ts";
 import { runApiRoutes } from "./runs/routes.ts";
 import { executionEvidenceScorer } from "./scorers/execution-evidence.ts";
@@ -126,6 +127,7 @@ export const mastra = new Mastra({
       }),
       ...runApiRoutes,
       ...turnApiRoutes,
+      ...knowledgeApiRoutes,
     ],
   },
 });
