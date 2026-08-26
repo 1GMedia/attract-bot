@@ -10,6 +10,24 @@ import { hermesExecutionOutputSchema, hermesLifecycleOutputSchema } from '../too
 export const taskInputSchema = z.object({
   workspaceId: z.string().trim().min(1).max(128),
   taskId: z.string().trim().min(1).max(256),
+  origin: z.object({
+    threadId: z.string().trim().min(1).max(256),
+    turnId: z.string().trim().min(1).max(128),
+    toolCallId: z.string().trim().min(1).max(128)
+  }).optional(),
+  tool: z.object({
+    name: z.string().trim().min(1).max(128),
+    arguments: z.record(z.string(), z.unknown()),
+    argumentsPreview: z.string().max(240),
+    argumentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    policyVersion: z.string().trim().min(1).max(64),
+    risk: z.enum(['read-only', 'private-read', 'mutation', 'external-send', 'expensive', 'unknown'])
+  }).optional(),
+  runtime: z.object({
+    location: z.enum(['local', 'orgo']),
+    remoteConnectionId: z.string().trim().min(1).max(128).optional(),
+    version: z.string().trim().min(1).max(128).optional()
+  }).optional(),
   parentRunId: z.string().trim().min(1).max(128).optional(),
   profile: z.string().trim().min(1).max(64).optional(),
   instructions: z.string().trim().min(1).max(40_000),
@@ -112,7 +130,10 @@ export function createHermesTaskLifecycle(dependencies: HermesLifecycleDependenc
       workspaceId: z.string(),
       taskId: z.string(),
       profile: z.string(),
-      instructionsPreview: z.string()
+      instructionsPreview: z.string(),
+      origin: taskInputSchema.shape.origin,
+      tool: taskInputSchema.shape.tool,
+      runtime: taskInputSchema.shape.runtime
     }),
     outputSchema: preparedTaskSchema,
     execute: async ({ inputData, resumeData, suspend }) => {
@@ -121,7 +142,10 @@ export function createHermesTaskLifecycle(dependencies: HermesLifecycleDependenc
           workspaceId: inputData.workspaceId,
           taskId: inputData.taskId,
           profile: inputData.profile || dependencies.defaultProfile,
-          instructionsPreview: inputData.instructions.slice(0, 240)
+          instructionsPreview: inputData.instructions.slice(0, 240),
+          origin: inputData.origin,
+          tool: inputData.tool,
+          runtime: inputData.runtime
         })
       }
       if (!resumeData.approved) throw new Error('Hermes execution was declined by the operator.')

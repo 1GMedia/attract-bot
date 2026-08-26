@@ -45,11 +45,16 @@ export {
   type WebSocketLike
 } from './json-rpc-gateway'
 export type {
+  MastraCancelTurnInput,
   MastraCapabilities,
   MastraEvidenceSummary,
+  MastraListMessagesRequest,
+  MastraListMessagesResponse,
   MastraListRunsRequest,
   MastraListRunsResponse,
+  MastraMessage,
   MastraResolveApprovalInput,
+  MastraRiskClassification,
   MastraRunApproval,
   MastraRunArtifact,
   MastraRunDetail,
@@ -60,8 +65,12 @@ export type {
   MastraRunState,
   MastraRunStep,
   MastraRunSummary,
+  MastraRuntimeLocation,
   MastraRuntimeStatus,
   MastraStartRunInput,
+  MastraStartTurnInput,
+  MastraTurnState,
+  MastraTurnSummary,
   MastraUsage
 } from './mastra-runs'
 export { skillInvocationText } from './skill-scaffold'
