@@ -1,6 +1,9 @@
 import crypto from 'node:crypto'
 
 import type {
+  MastraCancelTurnInput,
+  MastraListMessagesRequest,
+  MastraListMessagesResponse,
   MastraListRunsRequest,
   MastraListRunsResponse,
   MastraResolveApprovalInput,
@@ -9,7 +12,9 @@ import type {
   MastraRunMutation,
   MastraRunSummary,
   MastraRuntimeStatus,
-  MastraStartRunInput
+  MastraStartRunInput,
+  MastraStartTurnInput,
+  MastraTurnSummary
 } from '@hermes/shared/mastra-runs'
 
 export interface MastraRuntimeConnection {
@@ -64,6 +69,16 @@ function queryString(request: MastraListRunsRequest): string {
   const encoded = params.toString()
 
   return encoded ? `?${encoded}` : ''
+}
+
+function messageQueryString(request: MastraListMessagesRequest): string {
+  const params = new URLSearchParams({ threadId: request.threadId })
+
+  if (request.cursor) {params.set('cursor', request.cursor)}
+
+  if (request.limit) {params.set('limit', String(request.limit))}
+
+  return `?${params.toString()}`
 }
 
 function errorMessage(value: unknown): string {
@@ -175,6 +190,18 @@ export class MastraControlClient {
     const query = after ? `?after=${encodeURIComponent(after)}` : ''
 
     return this.request(`/korgo/runs/events${query}`)
+  }
+
+  listMessages(request: MastraListMessagesRequest): Promise<MastraListMessagesResponse> {
+    return this.request(`/korgo/messages${messageQueryString(request)}`)
+  }
+
+  startTurn(input: MastraStartTurnInput): Promise<MastraTurnSummary> {
+    return this.mutate('/korgo/turns', { ...input, instanceId: this.requireConnection().instanceId })
+  }
+
+  cancelTurn(input: MastraCancelTurnInput): Promise<MastraTurnSummary> {
+    return this.mutate(`/korgo/turns/${encodeURIComponent(input.turnId)}/cancel`, input)
   }
 
   private requireConnection(): MastraRuntimeConnection {

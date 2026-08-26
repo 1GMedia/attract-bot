@@ -11,6 +11,8 @@ import { runApiRoutes } from "./runs/routes.ts";
 import { executionEvidenceScorer } from "./scorers/execution-evidence.ts";
 import { knowledgeVectorStore, mastraStorage } from "./storage.ts";
 import { hermesTaskLifecycle } from "./workflows/hermes-task-lifecycle.ts";
+import { turnApiRoutes } from "./turns/routes.ts";
+import { supervisorTurn } from "./workflows/supervisor-turn.ts";
 
 const auth = mastraRuntimeConfig.auth.jwtSecret
   ? new MastraJwtAuth({ secret: mastraRuntimeConfig.auth.jwtSecret })
@@ -35,7 +37,7 @@ async function verifiedCapabilities() {
 
 export const mastra = new Mastra({
   agents: { hermesSupervisorAgent },
-  workflows: { hermesTaskLifecycle },
+  workflows: { hermesTaskLifecycle, supervisorTurn },
   scorers: { executionEvidenceScorer },
   vectors: { knowledgeVectorStore },
   mcpServers: { hermesMastraMcpServer },
@@ -115,11 +117,13 @@ export const mastra = new Mastra({
             configured: mastraRuntimeConfig.hermes.configured,
             executionOwner: true,
             composioOwner: true,
+            modelBoundary: mastraRuntimeConfig.modelBoundary,
           },
           capabilities: await verifiedCapabilities(),
         }),
       }),
       ...runApiRoutes,
+      ...turnApiRoutes,
     ],
   },
 });

@@ -1,5 +1,8 @@
 import type { GatewayWsUrlResult } from '@hermes/shared'
 import type {
+  MastraCancelTurnInput,
+  MastraListMessagesRequest,
+  MastraListMessagesResponse,
   MastraListRunsRequest,
   MastraListRunsResponse,
   MastraResolveApprovalInput,
@@ -8,7 +11,9 @@ import type {
   MastraRunMutation,
   MastraRunSummary,
   MastraRuntimeStatus,
-  MastraStartRunInput
+  MastraStartRunInput,
+  MastraStartTurnInput,
+  MastraTurnSummary
 } from '@hermes/shared/mastra-runs'
 
 import type { WakeIndicatorState } from './lib/wake-indicator'
@@ -196,6 +201,9 @@ declare global {
       }
       mastra: {
         getStatus: () => Promise<MastraRuntimeStatus>
+        listMessages: (request: MastraListMessagesRequest) => Promise<MastraListMessagesResponse>
+        startTurn: (input: MastraStartTurnInput) => Promise<MastraTurnSummary>
+        cancelTurn: (input: MastraCancelTurnInput) => Promise<MastraTurnSummary>
         listRuns: (request?: MastraListRunsRequest) => Promise<MastraListRunsResponse>
         getRun: (runId: string) => Promise<MastraRunDetail>
         startRun: (input: MastraStartRunInput) => Promise<MastraRunSummary>

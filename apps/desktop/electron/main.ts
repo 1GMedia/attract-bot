@@ -1148,6 +1148,7 @@ let mastraProcess: ReturnType<typeof spawn> | null = null
 const mastraControl = new MastraControlClient()
 const mastraEventSubscribers = new Map<number, WebContents>()
 const mastraKnownRunStates = new Map<string, string>()
+const mastraKnownTurnStates = new Map<string, string>()
 let mastraEventCursor: string | undefined
 let mastraPollTimer: ReturnType<typeof setTimeout> | null = null
 let mastraPollInFlight = false
@@ -1179,10 +1180,22 @@ function trackMastraRun(run: any) {
   broadcastMastraEvent({ type: 'run-upserted', cursor: mastraEventCursor || '', run })
 }
 
+function trackMastraTurn(turn: any) {
+  if (!turn?.turnId || !turn?.state) {return}
+  if (mastraKnownTurnStates.get(turn.turnId) === turn.state) {return}
+  mastraKnownTurnStates.set(turn.turnId, turn.state)
+  broadcastMastraEvent({ type: 'turn-upserted', cursor: mastraEventCursor || '', turn })
+}
+
 function mastraHasActiveRuns() {
-  return [...mastraKnownRunStates.values()].some(state =>
+  const activeRun = [...mastraKnownRunStates.values()].some(state =>
     ['awaiting-approval', 'preparing', 'queued', 'running'].includes(state)
   )
+  const activeTurn = [...mastraKnownTurnStates.values()].some(state =>
+    ['awaiting-tool-approval', 'queued', 'responding', 'running-tool'].includes(state)
+  )
+
+  return activeRun || activeTurn
 }
 
 function stopMastraPolling() {
@@ -1206,6 +1219,10 @@ async function pollMastraEvents() {
     const update = await mastraControl.pollEvents(mastraEventCursor)
     mastraEventCursor = update.cursor
     update.runs.forEach(trackMastraRun)
+    update.turns?.forEach(trackMastraTurn)
+    update.messages?.forEach(message => {
+      broadcastMastraEvent({ type: 'message-upserted', cursor: mastraEventCursor || '', message })
+    })
   } catch (error) {
     rememberLog(`[mastra] run update poll failed: ${error?.message || error}`)
   } finally {
@@ -1223,6 +1240,7 @@ function stopMastraBackend(options: { mode?: 'local' | 'remote'; reason?: string
   mastraProcess = null
   mastraEventCursor = undefined
   mastraKnownRunStates.clear()
+  mastraKnownTurnStates.clear()
   stopMastraPolling()
 
   if (mastraRestartTimer) {clearTimeout(mastraRestartTimer)}
@@ -10800,6 +10818,21 @@ function createWindow() {
 
 ipcMain.handle('hermes:connection', async (_event, profile) => ensureBackend(profile))
 ipcMain.handle('hermes:mastra:status', async () => mastraControl.getStatus())
+ipcMain.handle('hermes:mastra:messages:list', async (_event, request) => mastraControl.listMessages(request))
+ipcMain.handle('hermes:mastra:turns:start', async (_event, input) => {
+  const turn = await mastraControl.startTurn(input)
+  trackMastraTurn(turn)
+  scheduleMastraPoll()
+
+  return turn
+})
+ipcMain.handle('hermes:mastra:turns:cancel', async (_event, input) => {
+  const turn = await mastraControl.cancelTurn(input)
+  trackMastraTurn(turn)
+  scheduleMastraPoll()
+
+  return turn
+})
 ipcMain.handle('hermes:mastra:runs:list', async (_event, request) => mastraControl.listRuns(request || {}))
 ipcMain.handle('hermes:mastra:runs:get', async (_event, runId) => mastraControl.getRun(String(runId || '')))
 ipcMain.handle('hermes:mastra:runs:start', async (_event, input) => {

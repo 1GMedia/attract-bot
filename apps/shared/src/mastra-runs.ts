@@ -231,5 +231,7 @@ export interface MastraRunEvent {
 
 export interface MastraRunEventsResponse {
   cursor: string
+  messages?: MastraMessage[]
   runs: MastraRunSummary[]
+  turns?: MastraTurnSummary[]
 }
