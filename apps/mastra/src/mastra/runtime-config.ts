@@ -13,6 +13,8 @@ export interface MastraRuntimeConfig {
   modelBoundary: "direct-development" | "hermes-model-only" | "unconfigured";
   modelConfigured: boolean;
   instanceId: string;
+  runtimeLocation: "local" | "orgo";
+  runtimeVersion?: string;
   auth: {
     configured: boolean;
     jwtSecret?: string;
@@ -66,6 +68,10 @@ export function createRuntimeConfig(
     modelBoundary,
     modelConfigured: modelBoundary !== "unconfigured",
     instanceId: environment.KORGO_MASTRA_INSTANCE_ID?.trim() || "standalone",
+    runtimeLocation: environment.KORGO_MASTRA_RUNTIME_LOCATION === "orgo" ? "orgo" : "local",
+    ...(environment.KORGO_MASTRA_RUNTIME_VERSION?.trim()
+      ? { runtimeVersion: environment.KORGO_MASTRA_RUNTIME_VERSION.trim() }
+      : {}),
     auth: {
       configured: Boolean(jwtSecret),
       ...(jwtSecret ? { jwtSecret } : {}),

@@ -3,7 +3,7 @@ import { registerApiRoute, type ApiRoute } from '@mastra/core/server'
 import { z } from 'zod'
 import { mastraRuntimeConfig } from '../runtime-config.ts'
 import { taskInputSchema } from '../workflows/hermes-task-lifecycle.ts'
-import { changedTurns } from '../turns/turn-service.ts'
+import { changedMessages, changedTurns } from '../turns/turn-service.ts'
 import { cancelRun, changedRuns, getRun, listRuns, resolveRunApproval, retryRun, startRun } from './run-service.ts'
 import { instanceMatches } from './instance-guard.ts'
 
@@ -78,7 +78,8 @@ export const runApiRoutes: ApiRoute[] = [
           changedRuns(c.get('mastra'), after),
           changedTurns(c.get('mastra'), after)
         ])
-        return { cursor, runs, turns }
+        const messages = await changedMessages(turns.map(turn => turn.threadId), after)
+        return { cursor, messages, runs, turns }
       })
   }),
   registerApiRoute('/korgo/runs/:runId', {

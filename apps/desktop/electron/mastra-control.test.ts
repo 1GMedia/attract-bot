@@ -77,6 +77,28 @@ describe('Mastra desktop control client', () => {
     expect(fetchImplementation).not.toHaveBeenCalled()
   })
 
+  it('reports an attached Orgo runtime through the same status contract', async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      instanceId: 'orgo-instance',
+      capabilities: { agents: true, workflows: true }
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as unknown as typeof fetch
+    const client = new MastraControlClient(fetchImplementation)
+    client.attach({
+      baseUrl: 'http://127.0.0.1:49112',
+      instanceId: 'orgo-instance',
+      jwtSecret: 'remote-jwt',
+      mode: 'remote'
+    })
+
+    await expect(client.getStatus()).resolves.toMatchObject({
+      available: true,
+      instanceId: 'orgo-instance',
+      mode: 'remote',
+      capabilities: { agents: true, workflows: true }
+    })
+  })
+
   it('exposes only typed IPC methods to the renderer, never auth material or unrestricted HTTP', () => {
     const preload = fs.readFileSync(path.join(import.meta.dirname, 'preload.ts'), 'utf8')
     const mastraNamespace = preload.slice(preload.indexOf('mastra: {'), preload.indexOf('mastra: {') + 1_800)

@@ -2,6 +2,7 @@ import { RequestContext } from '@mastra/core/request-context'
 import { createStep, createWorkflow } from '@mastra/core/workflows'
 import { z } from 'zod'
 import { hermesSupervisorAgent } from '../agents/hermes-supervisor.ts'
+import { mastraRuntimeConfig } from '../runtime-config.ts'
 
 export const supervisorTurnInputSchema = z.object({
   clientTurnId: z.string().trim().min(1).max(128),
@@ -42,7 +43,8 @@ const defaultDependencies: SupervisorTurnDependencies = {
     const requestContext = new RequestContext(Object.entries({
       clientTurnId: input.clientTurnId,
       profile: input.profile,
-      runtimeLocation: 'local',
+      runtimeLocation: mastraRuntimeConfig.runtimeLocation,
+      runtimeVersion: mastraRuntimeConfig.runtimeVersion,
       threadId: input.threadId,
       turnId: input.turnId,
       workspaceId: input.workspaceId

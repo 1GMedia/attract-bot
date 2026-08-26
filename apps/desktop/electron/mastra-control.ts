@@ -21,6 +21,7 @@ export interface MastraRuntimeConnection {
   baseUrl: string
   instanceId: string
   jwtSecret: string
+  mode?: 'local' | 'remote'
 }
 
 const EMPTY_CAPABILITIES = {
@@ -102,7 +103,7 @@ export class MastraControlClient {
 
   attach(connection: MastraRuntimeConnection): void {
     this.connection = connection
-    this.mode = 'local'
+    this.mode = connection.mode || 'local'
     this.unavailableReason = ''
   }
 
@@ -147,7 +148,7 @@ export class MastraControlClient {
         available: true,
         capabilities: { ...EMPTY_CAPABILITIES, ...body.capabilities },
         instanceId: this.connection.instanceId,
-        mode: 'local',
+        mode: this.mode,
         service: 'hermes-mastra-local'
       }
     } catch (error) {
@@ -155,7 +156,7 @@ export class MastraControlClient {
         available: false,
         capabilities: EMPTY_CAPABILITIES,
         instanceId: this.connection.instanceId,
-        mode: 'local',
+        mode: this.mode,
         reason: error instanceof Error ? error.message : 'Mastra health check failed.',
         service: 'hermes-mastra-local'
       }

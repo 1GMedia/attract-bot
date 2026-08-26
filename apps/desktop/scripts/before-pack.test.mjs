@@ -4,7 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'vitest'
 
-import beforePack, { cleanStaleAppOutDir, preserveRollbackBackup } from '../scripts/before-pack.mjs'
+import beforePack, {
+  cleanStaleAppOutDir,
+  includeRemoteMastraResources,
+  preserveRollbackBackup
+} from '../scripts/before-pack.mjs'
 
 test('cleanStaleAppOutDir removes a populated unpacked directory', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-before-pack-'))
@@ -49,6 +53,29 @@ test('beforePack default export resolves even when cleanup throws', async () => 
   // context whose appOutDir is a file the hook will try (and be allowed) to
   // remove; the contract under test is that the hook never rejects.
   await assert.doesNotReject(beforePack({ appOutDir: '', electronPlatformName: 'linux' }))
+})
+
+test('remote Mastra resources are packaged only when a pinned Linux bundle exists', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-before-pack-'))
+  try {
+    const bundleDirectory = path.join(tempRoot, 'mastra-remote')
+    const context = { packager: { config: { extraResources: [{ from: 'existing', to: 'existing' }] } } }
+
+    assert.equal(includeRemoteMastraResources(context, bundleDirectory), false)
+    assert.equal(context.packager.config.extraResources.length, 1)
+
+    fs.mkdirSync(bundleDirectory, { recursive: true })
+    assert.equal(includeRemoteMastraResources(context, bundleDirectory), true)
+    assert.deepEqual(context.packager.config.extraResources[1], {
+      from: bundleDirectory,
+      to: 'mastra-remote',
+      filter: ['linux-*']
+    })
+    assert.equal(includeRemoteMastraResources(context, bundleDirectory), true)
+    assert.equal(context.packager.config.extraResources.length, 2)
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true })
+  }
 })
 
 // ─── Windows rollback preservation (#69179) ────────────────────────────────

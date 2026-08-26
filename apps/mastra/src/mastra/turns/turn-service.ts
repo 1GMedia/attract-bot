@@ -167,6 +167,28 @@ export async function listMessages(request: MastraListMessagesRequest): Promise<
   }
 }
 
+export async function changedMessages(threadIds: string[], after?: string): Promise<MastraMessage[]> {
+  const uniqueThreadIds = [...new Set(threadIds.filter(Boolean))]
+  if (!uniqueThreadIds.length) return []
+  const start = after && !Number.isNaN(Date.parse(after)) ? new Date(after) : undefined
+  const results = await Promise.all(uniqueThreadIds.map(async threadId => {
+    const recalled = await supervisorMemory.recall({
+      threadId,
+      page: 0,
+      perPage: 100,
+      orderBy: { field: 'createdAt', direction: 'ASC' },
+      ...(start ? { filter: { dateRange: { start, startExclusive: true } } } : {})
+    })
+    return recalled.messages.flatMap(message => {
+      const dto = messageDto(message, threadId)
+      return dto ? [dto] : []
+    })
+  }))
+  return results.flat().sort((left, right) =>
+    left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+  )
+}
+
 async function linkedRunsFor(mastra: Mastra, ids: string[]): Promise<MastraRunSummary[]> {
   if (!ids.length) return []
   const all = await listRuns(mastra, { limit: 100 })

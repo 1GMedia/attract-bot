@@ -112,6 +112,8 @@ export const mastra = new Mastra({
           ok: true,
           service: "hermes-mastra-local",
           instanceId: mastraRuntimeConfig.instanceId,
+          runtimeLocation: mastraRuntimeConfig.runtimeLocation,
+          runtimeVersion: mastraRuntimeConfig.runtimeVersion,
           authConfigured: mastraRuntimeConfig.auth.configured,
           hermes: {
             configured: mastraRuntimeConfig.hermes.configured,
