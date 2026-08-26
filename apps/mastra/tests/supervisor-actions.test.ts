@@ -2,6 +2,7 @@ import type { MastraStartRunInput } from '@hermes/shared/mastra-runs'
 import { RequestContext } from '@mastra/core/request-context'
 import { describe, expect, it, vi } from 'vitest'
 import { createSupervisorActionTools, durableActionInput } from '../src/mastra/tools/supervisor-actions.ts'
+import { riskForSupervisorTool, TOOL_POLICY_VERSION } from '../src/mastra/runs/tool-policy.ts'
 
 const context = {
   clientTurnId: 'client-turn-1',
@@ -39,6 +40,11 @@ describe('supervisor durable action tools', () => {
         version: 'release-1'
       }
     })
+  })
+
+  it('keeps connected-app risk unknown unless verified server metadata can classify it', () => {
+    expect(riskForSupervisorTool('use-connected-app')).toBe('unknown')
+    expect(TOOL_POLICY_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}\./)
   })
 
   it('creates a durable run and never executes Hermes from the supervisor tool', async () => {

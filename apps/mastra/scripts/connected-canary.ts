@@ -1,6 +1,7 @@
 import type { MastraRunDetail, MastraRunSummary } from '@hermes/shared/mastra-runs'
 import { createRuntimeConfig } from '../src/mastra/runtime-config.ts'
 import { authenticatedHeaders } from './auth.ts'
+import { TOOL_POLICY_VERSION } from '../src/mastra/runs/tool-policy.ts'
 
 const config = createRuntimeConfig()
 const connector = process.env.KORGO_CANARY_CONNECTOR?.trim().toLowerCase()
@@ -30,6 +31,16 @@ const run = await request<MastraRunSummary>('/korgo/runs', {
     workspaceId: process.env.KORGO_MASTRA_WORKSPACE_ID || 'connected-canary',
     taskId: `read-only-${connector}-${Date.now()}`,
     profile: config.hermes.defaultProfile,
+    tool: {
+      name: 'use-connected-app',
+      arguments: {
+        connector,
+        operation: connector === 'gohighlevel' ? 'read authenticated account identity' : 'list connected account names'
+      },
+      argumentsPreview: 'server replaces this preview',
+      policyVersion: TOOL_POLICY_VERSION,
+      risk: 'read-only'
+    },
     instructions:
       connector === 'gohighlevel'
         ? 'READ-ONLY CANARY. Through Hermes and its configured GoHighLevel connector, read the authenticated account or location identity and return only non-sensitive identifiers. Do not create, update, delete, send, or trigger anything.'
@@ -46,6 +57,9 @@ for (let attempt = 0; attempt < 120; attempt += 1) {
 }
 if (!detail?.approval)
   throw new Error(`Connected canary did not suspend for approval (state ${detail?.state || 'unknown'}).`)
+if (detail.risk !== 'unknown' || detail.policyVersion !== TOOL_POLICY_VERSION || detail.toolName !== 'use-connected-app') {
+  throw new Error('Connected canary approval metadata was not bound by the server policy.')
+}
 
 await request(`/korgo/runs/${encodeURIComponent(run.runId)}/approval`, {
   method: 'POST',

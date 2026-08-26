@@ -15,7 +15,12 @@ import type { WorkflowRun } from '@mastra/core/storage'
 import type { WorkflowRunState, WorkflowState } from '@mastra/core/workflows'
 import { mastraRuntimeConfig } from '../runtime-config.ts'
 import { redactRunText } from './redaction.ts'
-import { approvalArgumentHash } from './tool-policy.ts'
+import {
+  approvalArgumentHash,
+  previewToolArguments,
+  riskForSupervisorTool,
+  TOOL_POLICY_VERSION
+} from './tool-policy.ts'
 
 const WORKFLOW_ID = 'hermes-task-lifecycle' as const
 const APPROVAL_STEP_ID = 'await-execution-approval'
@@ -45,6 +50,17 @@ function iso(value: unknown): string | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString()
   if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) return new Date(value).toISOString()
   return undefined
+}
+
+export function bindRunToolPolicy(
+  tool: NonNullable<MastraStartRunInput['tool']>
+): NonNullable<MastraStartRunInput['tool']> {
+  return {
+    ...tool,
+    argumentsPreview: previewToolArguments(tool.arguments),
+    policyVersion: TOOL_POLICY_VERSION,
+    risk: riskForSupervisorTool(tool.name)
+  }
 }
 
 function snapshotOf(run: WorkflowRun): Snapshot {
@@ -321,11 +337,11 @@ export async function startRun(mastra: Mastra, input: MastraStartRunInput): Prom
     ? {
         ...input,
         tool: {
-          ...input.tool,
+          ...bindRunToolPolicy(input.tool),
           argumentHash: approvalArgumentHash({
             toolName: input.tool.name,
             arguments: input.tool.arguments,
-            policyVersion: input.tool.policyVersion,
+            policyVersion: TOOL_POLICY_VERSION,
             runId: run.runId,
             instanceId: mastraRuntimeConfig.instanceId
           })
