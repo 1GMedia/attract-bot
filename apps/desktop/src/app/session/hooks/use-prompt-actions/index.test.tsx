@@ -346,6 +346,7 @@ describe('usePromptActions Mastra supervisor routing', () => {
 
   it('sends an upgraded Bot Chat to Mastra without also submitting it directly to Hermes', async () => {
     let onMastraEvent: ((event: any) => void) | undefined
+
     const startTurn = vi.fn(async () => ({
       clientTurnId: 'client-1',
       createdAt: new Date().toISOString(),
@@ -358,8 +359,11 @@ describe('usePromptActions Mastra supervisor routing', () => {
       updatedAt: new Date().toISOString(),
       workspaceId: '/workspace'
     }))
+
     window.hermesDesktop = {
-      mastra: { onEvent: vi.fn(callback => { onMastraEvent = callback; return () => {} }), startTurn }
+      mastra: { onEvent: vi.fn(callback => { onMastraEvent = callback;
+
+ return () => {} }), startTurn }
     } as unknown as Window['hermesDesktop']
     $mastraChatEnabled.set(true)
     $mastraStatus.set(AVAILABLE_MASTRA_STATUS)
@@ -372,8 +376,8 @@ describe('usePromptActions Mastra supervisor routing', () => {
     await actRender(
       <Harness
         getRuntimeIdForStoredSession={id => id === 'stored-chat-1' ? RUNTIME_SESSION_ID : null}
-        onUpdateState={(_runtimeId, _storedId, state) => updated.push(state)}
         onReady={value => (handle = value)}
+        onUpdateState={(_runtimeId, _storedId, state) => updated.push(state)}
         refreshSessions={async () => undefined}
         requestGateway={requestGateway}
         storedSessionId="stored-chat-1"
@@ -400,6 +404,7 @@ describe('usePromptActions Mastra supervisor routing', () => {
       },
       type: 'message-upserted'
     }
+
     await act(async () => {
       onMastraEvent?.(assistantEvent)
       onMastraEvent?.(assistantEvent)

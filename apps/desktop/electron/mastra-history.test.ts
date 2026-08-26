@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { mapHermesHistory } from './mastra-history'
 
 describe('Mastra Hermes history import', () => {

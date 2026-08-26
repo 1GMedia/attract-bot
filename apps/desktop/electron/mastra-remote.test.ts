@@ -2,7 +2,9 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import { loadRemoteMastraBundle, provisionRemoteMastra, remoteArchitecture } from './mastra-remote'
 
 const temporary: string[] = []
@@ -24,6 +26,7 @@ function bundle() {
     nodeVersion: '22.22.0',
     releaseVersion: 'release-1'
   }))
+
   return directory
 }
 
@@ -42,17 +45,22 @@ describe('remote Mastra provisioning', () => {
 
   it('uploads, starts, and forwards a fresh remote runtime without putting secrets in commands', async () => {
     const commands: Array<{ command: string; stdinData?: Buffer | string }> = []
+
     const ssh = {
       exec: vi.fn(async (command: string, options?: { stdinData?: Buffer | string }) => {
         commands.push({ command, stdinData: options?.stdinData })
-        if (command === 'uname -m') return 'x86_64\n'
+
+        if (command === 'uname -m') {return 'x86_64\n'}
+
         if (command.includes('sha256sum')) {
           return `22.22.0:${crypto.createHash('sha256').update('node binary').digest('hex')}\n`
         }
+
         return ''
       }),
       forward: vi.fn(async () => undefined)
     }
+
     const result = await provisionRemoteMastra({
       bundleDirectory: bundle(),
       hermesApiKey: 'hermes-secret',
@@ -73,18 +81,24 @@ describe('remote Mastra provisioning', () => {
 
   it('reuses a live pinned runtime and its instance identity without uploading or restarting it', async () => {
     const commands: Array<{ command: string; stdinData?: Buffer | string }> = []
+
     const ssh = {
       exec: vi.fn(async (command: string, options?: { stdinData?: Buffer | string }) => {
         commands.push({ command, stdinData: options?.stdinData })
-        if (command === 'uname -m') return 'x86_64\n'
+
+        if (command === 'uname -m') {return 'x86_64\n'}
+
         if (command.includes('sha256sum')) {
           return `22.22.0:${crypto.createHash('sha256').update('node binary').digest('hex')}\n`
         }
+
         if (command.includes('runtime.manifest')) {
           const directory = bundleDirectory
           const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'linux-x64.json'), 'utf8'))
+
           return `release-1:${manifest.archiveHash}`
         }
+
         if (command.includes('runtime.env')) {
           return [
             "KORGO_MASTRA_INSTANCE_ID='existing-instance'",
@@ -92,12 +106,16 @@ describe('remote Mastra provisioning', () => {
             "KORGO_MASTRA_RUNTIME_VERSION='release-1'"
           ].join('\n')
         }
-        if (command.includes('kill -0')) return 'yes\n'
+
+        if (command.includes('kill -0')) {return 'yes\n'}
+
         return ''
       }),
       forward: vi.fn(async () => undefined)
     }
+
     const bundleDirectory = bundle()
+
     const result = await provisionRemoteMastra({
       bundleDirectory,
       hermesApiKey: 'new-hermes-secret',
@@ -115,12 +133,15 @@ describe('remote Mastra provisioning', () => {
   it('fails closed when the pinned Node binary is absent from the installed release', async () => {
     const ssh = {
       exec: vi.fn(async (command: string) => {
-        if (command === 'uname -m') return 'x86_64\n'
-        if (command.includes('sha256sum')) return ''
+        if (command === 'uname -m') {return 'x86_64\n'}
+
+        if (command.includes('sha256sum')) {return ''}
+
         return ''
       }),
       forward: vi.fn(async () => undefined)
     }
+
     await expect(provisionRemoteMastra({
       bundleDirectory: bundle(),
       hermesApiKey: 'hermes-secret',

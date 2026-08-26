@@ -12,10 +12,12 @@ import {
 describe('Mastra desktop backend', () => {
   it('selects only the explicit application knowledge allowlist', () => {
     const root = path.resolve('checkout')
+
     const allowed = new Set([
       path.join(root, 'AGENTS.md'),
       path.join(root, 'docs', 'profile-routing.md')
     ])
+
     expect(approvedKnowledgeSourcePaths(root, candidate => allowed.has(candidate))).toEqual([...allowed])
   })
 

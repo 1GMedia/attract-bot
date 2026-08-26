@@ -49,6 +49,7 @@ describe('Mastra desktop control client', () => {
         headers: { 'Content-Type': 'application/json' }
       })
     ) as unknown as typeof fetch
+
     const client = new MastraControlClient(fetchImplementation)
     client.attach({ baseUrl: 'http://127.0.0.1:4112', instanceId: 'instance-a', jwtSecret: 'jwt-secret' })
 
@@ -70,6 +71,7 @@ describe('Mastra desktop control client', () => {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     })) as unknown as typeof fetch
+
     const client = new MastraControlClient(fetchImplementation)
     client.attach({ baseUrl: 'http://127.0.0.1:49112', instanceId: 'orgo-instance', jwtSecret: 'remote-jwt' })
 
@@ -98,6 +100,7 @@ describe('Mastra desktop control client', () => {
       instanceId: 'orgo-instance',
       capabilities: { agents: true, workflows: true }
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as unknown as typeof fetch
+
     const client = new MastraControlClient(fetchImplementation)
     client.attach({
       baseUrl: 'http://127.0.0.1:49112',

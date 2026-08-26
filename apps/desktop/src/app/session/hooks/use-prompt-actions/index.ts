@@ -273,15 +273,19 @@ export function usePromptActions({
 
   useEffect(() => window.hermesDesktop?.mastra?.onEvent?.((event: MastraRunEvent) => {
     const threadId = event.message?.threadId || event.turn?.threadId
-    if (!threadId) return
+
+    if (!threadId) {return}
+
     const runtimeId = getRuntimeIdForStoredSession(threadId) ||
       (selectedStoredSessionIdRef.current === threadId ? activeSessionIdRef.current : null)
-    if (!runtimeId) return
+
+    if (!runtimeId) {return}
 
     if (event.type === 'message-upserted' && event.message?.role === 'assistant') {
       const messageId = `mastra:${event.message.id}`
       updateSessionState(runtimeId, state => {
-        if (state.messages.some(message => message.id === messageId)) return state
+        if (state.messages.some(message => message.id === messageId)) {return state}
+
         return {
           ...state,
           messages: [...state.messages, {

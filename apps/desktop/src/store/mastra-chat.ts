@@ -1,5 +1,5 @@
-import { atom } from 'nanostores'
 import type { MastraRuntimeStatus } from '@hermes/shared/mastra-runs'
+import { atom } from 'nanostores'
 
 import { isBotProduct } from '@/lib/product'
 import { persistBoolean, storedBoolean } from '@/lib/storage'
@@ -13,6 +13,7 @@ function scopeKey(): string {
   const connection = $connection.get()
   const profile = $activeGatewayProfile.get() || connection?.profile || 'default'
   const location = connection?.baseUrl || connection?.mode || 'pending'
+
   return `${KEY}.${encodeURIComponent(location)}.${encodeURIComponent(profile)}`
 }
 
@@ -36,7 +37,8 @@ export function mastraConversationDecision(input: {
   status: MastraRuntimeStatus
   threadId: string | null | undefined
 }): 'direct-hermes' | 'mastra' | 'mastra-unavailable' {
-  if (!input.enabled || !input.threadId) return 'direct-hermes'
+  if (!input.enabled || !input.threadId) {return 'direct-hermes'}
+
   return input.status.available && input.status.capabilities.agents && input.status.capabilities.memory
     ? 'mastra'
     : 'mastra-unavailable'

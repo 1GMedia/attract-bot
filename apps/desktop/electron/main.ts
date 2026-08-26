@@ -1188,6 +1188,7 @@ function trackMastraRun(run: any) {
 
 function trackMastraTurn(turn: any) {
   if (!turn?.turnId || !turn?.state) {return}
+
   if (mastraKnownTurnStates.get(turn.turnId) === turn.state) {return}
   mastraKnownTurnStates.set(turn.turnId, turn.state)
   broadcastMastraEvent({ type: 'turn-upserted', cursor: mastraEventCursor || '', turn })
@@ -1203,6 +1204,7 @@ function mastraHasActiveRuns() {
   const activeRun = [...mastraKnownRunStates.values()].some(state =>
     ['awaiting-approval', 'preparing', 'queued', 'running'].includes(state)
   )
+
   const activeTurn = [...mastraKnownTurnStates.values()].some(state =>
     ['awaiting-tool-approval', 'queued', 'responding', 'running-tool'].includes(state)
   )
@@ -1271,6 +1273,7 @@ function stopMastraBackend(options: { mode?: 'local' | 'remote'; reason?: string
   if (child && !child.killed) {
     stopBackendChild(child)
   }
+
   if (remoteTunnel) {
     void remoteTunnel.ssh.cancelForward(remoteTunnel.localPort, remoteTunnel.remotePort).catch(() => undefined)
   }
@@ -1382,22 +1385,29 @@ async function startMastraBackend(options: {
 
 async function startRemoteMastraBackend(connection: any) {
   stopMastraBackend({ mode: 'remote', reason: 'Connecting to the Orgo Mastra runtime.' })
+
   if (connection.remoteKind !== 'ssh' || !connection.token) {
     mastraControl.detach({
       mode: 'remote',
       reason: 'Remote Mastra requires the Korgo Bot Tailscale SSH connection.'
     })
+
     return
   }
+
   const scope = sshScopeKey(primaryProfileKey())
   const remoteState = sshConnections.get(scope)
+
   if (!remoteState?.ssh || !remoteState.remotePort) {
     mastraControl.detach({ mode: 'remote', reason: 'The shared Orgo SSH owner is not available for Mastra.' })
+
     return
   }
+
   const bundleDirectory = app.isPackaged
     ? path.join(process.resourcesPath, 'mastra-remote')
     : path.join(process.cwd(), 'build', 'mastra-remote')
+
   try {
     const remote = await provisionRemoteMastra({
       bundleDirectory,
@@ -1407,6 +1417,7 @@ async function startRemoteMastraBackend(connection: any) {
       profile: primaryProfileKey(),
       ssh: remoteState.ssh
     })
+
     mastraRemoteTunnel = { localPort: remote.localPort, remotePort: remote.remotePort, ssh: remoteState.ssh }
     await waitForMastraReady({
       healthUrl: `${remote.baseUrl}/korgo/health`,
@@ -1430,6 +1441,7 @@ async function startRemoteMastraBackend(connection: any) {
         .catch(() => undefined)
       mastraRemoteTunnel = null
     }
+
     mastraControl.detach({
       mode: 'remote',
       reason: error instanceof Error ? error.message : 'The Orgo Mastra runtime could not start.'
@@ -10892,21 +10904,26 @@ function createWindow() {
 ipcMain.handle('hermes:connection', async (_event, profile) => ensureBackend(profile))
 ipcMain.handle('hermes:mastra:status', async () => mastraControl.getStatus())
 ipcMain.handle('hermes:mastra:messages:list', async (_event, request) => mastraControl.listMessages(request))
+
 async function ensureMastraThreadHistory(input: any) {
   const instanceId = mastraControl.instanceId
   const profile = String(input?.profile || 'default')
   const threadId = String(input?.threadId || '')
   const workspaceId = String(input?.workspaceId || '')
   const migrationKey = `${instanceId || 'unavailable'}:${profile}:${threadId}`
+
   if (!threadId || !workspaceId || mastraImportedThreads.has(migrationKey)) {return}
   const query = new URLSearchParams({ limit: '500', order: 'latest', profile })
+
   const request = {
     method: 'GET',
     path: `/api/sessions/${encodeURIComponent(threadId)}/messages?${query}`,
     profile
   }
+
   const transcript = (await interceptSessionRequestForRemote(request)) ??
     await fetchJsonForProfile(profile, request.path)
+
   const messages = mapHermesHistory(transcript?.messages, profile, threadId)
   await mastraControl.importHermesHistory({ messages, profile, threadId, workspaceId })
   mastraImportedThreads.add(migrationKey)
@@ -10915,13 +10932,17 @@ async function ensureMastraThreadHistory(input: any) {
 async function ensureRemoteMastraKnowledge(workspaceIdValue: unknown) {
   if (!mastraRemoteTunnel) {return}
   const workspaceId = String(workspaceIdValue || '').trim()
-  if (!workspaceId) throw new Error('A workspace identity is required before syncing Orgo knowledge.')
+
+  if (!workspaceId) {throw new Error('A workspace identity is required before syncing Orgo knowledge.')}
+
   const knowledgeRoot = app.isPackaged
     ? path.join(process.resourcesPath, 'mastra-knowledge')
     : path.resolve(APP_ROOT, '../..')
+
   const sources = approvedKnowledgeSourcePaths(knowledgeRoot).map(sourcePath => {
     const content = fs.readFileSync(sourcePath, 'utf8')
     const logicalPath = path.relative(knowledgeRoot, sourcePath).split(path.sep).join('/')
+
     return {
       content,
       contentHash: crypto.createHash('sha256').update(content).digest('hex'),
@@ -10929,9 +10950,11 @@ async function ensureRemoteMastraKnowledge(workspaceIdValue: unknown) {
       sourceId: `${workspaceId}:${logicalPath}`
     }
   })
+
   const identity = crypto.createHash('sha256')
     .update(`${mastraControl.instanceId}\0${workspaceId}\0${sources.map(source => source.contentHash).join('\0')}`)
     .digest('hex')
+
   if (mastraSyncedKnowledge.has(identity)) {return}
   await mastraControl.syncKnowledgeSources({ sources, workspaceId })
   mastraSyncedKnowledge.add(identity)
