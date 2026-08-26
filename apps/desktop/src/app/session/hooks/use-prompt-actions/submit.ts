@@ -21,8 +21,12 @@ import {
 import { $hudMode } from '@/store/hud'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
+import { $mastraChatEnabled, mastraConversationDecision } from '@/store/mastra-chat'
+import { $mastraStatus } from '@/store/mastra-runs'
+import { $activeGatewayProfile } from '@/store/profile'
 import {
   $sessions,
+  $currentCwd,
   resolveComposerSessionKey,
   setActiveSessionId,
   setAwaitingResponse,
@@ -615,6 +619,32 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
         attachmentRefs = syncedAttachments.map(optimisticAttachmentRef).filter((r): r is string => Boolean(r))
         rewriteOptimistic(liveSessionId)
         const text = buildContextText(syncedAttachments)
+
+        const supervisorThreadId = targetStoredSessionId ?? startingStoredSessionId
+        const mastraDecision = mastraConversationDecision({
+          enabled: $mastraChatEnabled.get(),
+          status: $mastraStatus.get(),
+          threadId: supervisorThreadId
+        })
+        if (mastraDecision === 'mastra-unavailable') {
+          const status = $mastraStatus.get()
+          throw new Error(status.reason || 'Mastra conversations are unavailable. Use the compatibility switch to send directly through Hermes.')
+        }
+        if (mastraDecision === 'mastra') {
+          if (!supervisorThreadId) throw new Error('Mastra conversation thread is unavailable.')
+          const profile = (await resolveSessionProfile(supervisorThreadId)) || $activeGatewayProfile.get() || 'default'
+          await window.hermesDesktop.mastra.startTurn({
+            clientTurnId: crypto.randomUUID(),
+            message: text,
+            profile,
+            threadId: supervisorThreadId,
+            workspaceId: $currentCwd.get().trim() || `profile:${profile}`
+          })
+
+          if (usingComposerAttachments) scope.clearAttachments()
+          releaseSubmitLock()
+          return true
+        }
 
         const submitParams = (targetId: string) => ({
           session_id: targetId,

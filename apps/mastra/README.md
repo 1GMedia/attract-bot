@@ -16,6 +16,8 @@ Production desktop builds bundle the generated local Mastra runtime without Stud
 
 The authenticated desktop adapter exposes stable message, turn, and run DTOs rather than Mastra's native wire format. Tool approvals are bound to the tool name, canonical arguments, policy version, run ID, and current Mastra instance nonce; the identity is verified again before workflow resume.
 
+When an existing Bot Chat is upgraded, Electron main imports at most the latest 500 conversational Hermes messages into the same Mastra thread ID. The import excludes tool and system payloads, redacts sensitive text, uses stable Hermes row identities, and is idempotent across reconnects. Orgo Bot connections default to Mastra conversations; the Runs header exposes a connection-scoped direct-Hermes compatibility switch, and an enabled Mastra conversation fails closed if the supervisor is unavailable instead of silently changing execution paths.
+
 Useful commands from the repository root:
 
 ```bash

@@ -197,6 +197,18 @@ export class MastraControlClient {
     return this.request(`/korgo/messages${messageQueryString(request)}`)
   }
 
+  importHermesHistory(input: {
+    messages: Array<{ content: string; createdAt: string; id: string; role: 'assistant' | 'user' }>
+    profile: string
+    threadId: string
+    workspaceId: string
+  }): Promise<{ imported: number; skipped: number }> {
+    return this.mutate('/korgo/threads/import', {
+      ...input,
+      instanceId: this.requireConnection().instanceId
+    })
+  }
+
   startTurn(input: MastraStartTurnInput): Promise<MastraTurnSummary> {
     return this.mutate('/korgo/turns', { ...input, instanceId: this.requireConnection().instanceId })
   }

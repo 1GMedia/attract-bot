@@ -166,6 +166,7 @@ import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle 
 import { ensureMainWindow } from './main-window-lifecycle'
 import { buildMastraSpawnSpec, waitForMastraReady } from './mastra-backend'
 import { MastraControlClient } from './mastra-control'
+import { mapHermesHistory } from './mastra-history'
 import { provisionRemoteMastra } from './mastra-remote'
 import { BoundedRestartBudget } from './mastra-restart'
 import {
@@ -1152,6 +1153,7 @@ const mastraEventSubscribers = new Map<number, WebContents>()
 const mastraKnownRunStates = new Map<string, string>()
 const mastraKnownTurnStates = new Map<string, string>()
 const mastraKnownMessageIds = new Set<string>()
+const mastraImportedThreads = new Set<string>()
 let mastraEventCursor: string | undefined
 let mastraPollTimer: ReturnType<typeof setTimeout> | null = null
 let mastraPollInFlight = false
@@ -1251,6 +1253,7 @@ function stopMastraBackend(options: { mode?: 'local' | 'remote'; reason?: string
   mastraKnownRunStates.clear()
   mastraKnownTurnStates.clear()
   mastraKnownMessageIds.clear()
+  mastraImportedThreads.clear()
   stopMastraPolling()
 
   if (mastraRestartTimer) {clearTimeout(mastraRestartTimer)}
@@ -10887,7 +10890,28 @@ function createWindow() {
 ipcMain.handle('hermes:connection', async (_event, profile) => ensureBackend(profile))
 ipcMain.handle('hermes:mastra:status', async () => mastraControl.getStatus())
 ipcMain.handle('hermes:mastra:messages:list', async (_event, request) => mastraControl.listMessages(request))
+async function ensureMastraThreadHistory(input: any) {
+  const instanceId = mastraControl.instanceId
+  const profile = String(input?.profile || 'default')
+  const threadId = String(input?.threadId || '')
+  const workspaceId = String(input?.workspaceId || '')
+  const migrationKey = `${instanceId || 'unavailable'}:${profile}:${threadId}`
+  if (!threadId || !workspaceId || mastraImportedThreads.has(migrationKey)) {return}
+  const query = new URLSearchParams({ limit: '500', order: 'latest', profile })
+  const request = {
+    method: 'GET',
+    path: `/api/sessions/${encodeURIComponent(threadId)}/messages?${query}`,
+    profile
+  }
+  const transcript = (await interceptSessionRequestForRemote(request)) ??
+    await fetchJsonForProfile(profile, request.path)
+  const messages = mapHermesHistory(transcript?.messages, profile, threadId)
+  await mastraControl.importHermesHistory({ messages, profile, threadId, workspaceId })
+  mastraImportedThreads.add(migrationKey)
+}
+
 ipcMain.handle('hermes:mastra:turns:start', async (_event, input) => {
+  await ensureMastraThreadHistory(input)
   const turn = await mastraControl.startTurn(input)
   trackMastraTurn(turn)
   scheduleMastraPoll()

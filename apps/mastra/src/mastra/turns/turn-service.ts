@@ -189,6 +189,73 @@ export async function changedMessages(threadIds: string[], after?: string): Prom
   )
 }
 
+export interface HermesHistoryImportInput {
+  messages: Array<{
+    content: string
+    createdAt: string
+    id: string
+    role: 'assistant' | 'user'
+  }>
+  profile: string
+  threadId: string
+  workspaceId: string
+}
+
+type HistoryMemory = Pick<
+  typeof supervisorMemory,
+  'getThreadById' | 'recall' | 'saveMessages' | 'saveThread'
+>
+
+export async function importHermesHistory(
+  input: HermesHistoryImportInput,
+  memory: HistoryMemory = supervisorMemory
+): Promise<{
+  imported: number
+  skipped: number
+}> {
+  const resourceId = `${input.workspaceId}:${input.profile}`
+  const existingThread = await memory.getThreadById({ threadId: input.threadId, resourceId })
+  if (!existingThread) {
+    const now = new Date()
+    await memory.saveThread({
+      thread: {
+        id: input.threadId,
+        resourceId,
+        createdAt: now,
+        updatedAt: now,
+        metadata: { importedFrom: 'hermes' }
+      }
+    })
+  }
+  const recalled = await memory.recall({
+    threadId: input.threadId,
+    page: 0,
+    perPage: 500,
+    orderBy: { field: 'createdAt', direction: 'ASC' }
+  })
+  const existingIds = new Set(recalled.messages.map(message => message.id))
+  const pending = input.messages.flatMap(message => {
+    if (existingIds.has(message.id)) return []
+    const content = redactRunText(message.content)?.trim() || ''
+    const createdAt = new Date(message.createdAt)
+    if (!content || Number.isNaN(createdAt.valueOf())) return []
+    return [{
+      id: message.id,
+      role: message.role,
+      createdAt,
+      threadId: input.threadId,
+      resourceId,
+      content: {
+        format: 2 as const,
+        parts: [{ type: 'text' as const, text: content }],
+        metadata: { importedFrom: 'hermes' }
+      }
+    }]
+  })
+  if (pending.length) await memory.saveMessages({ messages: pending })
+  return { imported: pending.length, skipped: input.messages.length - pending.length }
+}
+
 async function linkedRunsFor(mastra: Mastra, ids: string[]): Promise<MastraRunSummary[]> {
   if (!ids.length) return []
   const all = await listRuns(mastra, { limit: 100 })
