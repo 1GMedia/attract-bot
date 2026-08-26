@@ -41,6 +41,29 @@ describe('Mastra desktop backend', () => {
     })
   })
 
+  it('launches the flattened runtime layout shipped in packaged app resources', () => {
+    const mastraDirectory = path.join(path.sep, 'Applications', 'Korgo Bot.app', 'Contents', 'Resources', 'mastra')
+    const output = path.join(mastraDirectory, 'index.mjs')
+    const managedNode = path.join(path.sep, 'managed', 'node')
+    const existing = new Set([output, managedNode])
+
+    const spec = buildMastraSpawnSpec({
+      hermesRoot: path.join(path.sep, 'repo'),
+      mastraDirectory,
+      hermesHome: path.join(path.sep, 'managed'),
+      hermesBaseUrl: 'http://127.0.0.1:8642',
+      hermesApiKey: 'hermes-secret',
+      jwtSecret: 'jwt-secret',
+      instanceId: 'packaged-instance',
+      environment: { NODE: managedNode },
+      exists: candidate => existing.has(candidate)
+    })
+
+    expect(spec.args).toEqual([output])
+    expect(spec.cwd).toBe(mastraDirectory)
+    expect(spec.env.MASTRA_STUDIO_PATH).toBeUndefined()
+  })
+
   it('requires the expected health identity', async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

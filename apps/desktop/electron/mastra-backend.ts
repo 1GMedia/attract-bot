@@ -12,6 +12,25 @@ export interface MastraSpawnSpec {
   instanceId: string
 }
 
+function resolveMastraOutput(
+  mastraDirectory: string,
+  exists: (candidate: string) => boolean
+): { output: string; studio?: string } {
+  const packagedOutput = path.join(mastraDirectory, 'index.mjs')
+
+  if (exists(packagedOutput)) {
+    return { output: packagedOutput }
+  }
+
+  const developmentOutput = path.join(mastraDirectory, '.mastra', 'output', 'index.mjs')
+  const developmentStudio = path.join(mastraDirectory, '.mastra', 'output', 'studio')
+
+  return {
+    output: developmentOutput,
+    ...(exists(developmentStudio) ? { studio: developmentStudio } : {})
+  }
+}
+
 export function resolveManagedNode(
   hermesHome: string,
   environment: NodeJS.ProcessEnv = process.env,
@@ -43,9 +62,8 @@ export function buildMastraSpawnSpec(options: {
   exists?: (candidate: string) => boolean
 }): MastraSpawnSpec {
   const mastraDirectory = options.mastraDirectory || path.join(options.hermesRoot, 'apps', 'mastra')
-  const output = path.join(mastraDirectory, '.mastra', 'output', 'index.mjs')
-  const studio = path.join(mastraDirectory, '.mastra', 'output', 'studio')
   const exists = options.exists || fs.existsSync
+  const { output, studio } = resolveMastraOutput(mastraDirectory, exists)
 
   const knowledgeSources = [
     path.join(options.hermesRoot, 'AGENTS.md'),
@@ -78,7 +96,7 @@ export function buildMastraSpawnSpec(options: {
       KORGO_MASTRA_INSTANCE_ID: options.instanceId,
       KORGO_MASTRA_KNOWLEDGE_SOURCES: knowledgeSources.join(path.delimiter),
       KORGO_MASTRA_WORKSPACE_ID: options.hermesRoot,
-      ...(exists(studio) ? { MASTRA_STUDIO_PATH: studio } : {})
+      ...(studio ? { MASTRA_STUDIO_PATH: studio } : {})
     }
   }
 }
