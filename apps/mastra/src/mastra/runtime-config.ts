@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { MastraModelConfig } from "@mastra/core/llm";
 
 const DEFAULT_MASTRA_PORT = 4112;
 const DEFAULT_HERMES_URL = "http://127.0.0.1:8642";
@@ -8,7 +9,8 @@ export interface MastraRuntimeConfig {
   host: "127.0.0.1";
   port: number;
   dataDirectory: string;
-  model: string;
+  model: MastraModelConfig;
+  modelBoundary: "direct-development" | "hermes-model-only" | "unconfigured";
   modelConfigured: boolean;
   instanceId: string;
   auth: {
@@ -31,6 +33,26 @@ export function createRuntimeConfig(
 ): MastraRuntimeConfig {
   const jwtSecret = cleanSecret(environment.KORGO_MASTRA_JWT_SECRET);
   const hermesApiKey = cleanSecret(environment.KORGO_HERMES_API_KEY ?? environment.API_SERVER_KEY);
+  const hermesBaseUrl = normalizeHermesUrl(environment.KORGO_HERMES_URL || DEFAULT_HERMES_URL);
+  const profile = normalizeProfile(environment.KORGO_HERMES_PROFILE || "default");
+  const configuredModel = normalizeModel(environment.KORGO_MASTRA_MODEL || "openai/gpt-5.6-sol");
+  const directDevelopment = environment.KORGO_MASTRA_ALLOW_DIRECT_MODEL === "1"
+    && hasModelCredential(configuredModel, environment);
+  const modelBoundary = hermesApiKey
+    ? "hermes-model-only"
+    : directDevelopment
+      ? "direct-development"
+      : "unconfigured";
+  const model: MastraModelConfig = hermesApiKey
+    ? {
+        providerId: "hermes-model",
+        modelId: "active",
+        url: profile === "default"
+          ? `${hermesBaseUrl}/v1/model`
+          : `${hermesBaseUrl}/p/${encodeURIComponent(profile)}/v1/model`,
+        apiKey: hermesApiKey,
+      }
+    : configuredModel;
 
   return {
     host: "127.0.0.1",
@@ -40,21 +62,19 @@ export function createRuntimeConfig(
       homeDirectory,
       runtimePlatform,
     ),
-    model: normalizeModel(environment.KORGO_MASTRA_MODEL || "openai/gpt-5.6-sol"),
-    modelConfigured: hasModelCredential(
-      normalizeModel(environment.KORGO_MASTRA_MODEL || "openai/gpt-5.6-sol"),
-      environment,
-    ),
+    model,
+    modelBoundary,
+    modelConfigured: modelBoundary !== "unconfigured",
     instanceId: environment.KORGO_MASTRA_INSTANCE_ID?.trim() || "standalone",
     auth: {
       configured: Boolean(jwtSecret),
       ...(jwtSecret ? { jwtSecret } : {}),
     },
     hermes: {
-      baseUrl: normalizeHermesUrl(environment.KORGO_HERMES_URL || DEFAULT_HERMES_URL),
+      baseUrl: hermesBaseUrl,
       configured: Boolean(hermesApiKey),
       ...(hermesApiKey ? { apiKey: hermesApiKey } : {}),
-      defaultProfile: normalizeProfile(environment.KORGO_HERMES_PROFILE || "default"),
+      defaultProfile: profile,
       requestTimeoutMs: parsePositiveInteger(
         environment.KORGO_HERMES_TIMEOUT_MS,
         15 * 60 * 1_000,
