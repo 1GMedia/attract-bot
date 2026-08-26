@@ -20,6 +20,8 @@ function bundle() {
   fs.writeFileSync(path.join(directory, 'linux-x64.json'), JSON.stringify({
     archiveHash,
     architecture: 'x64',
+    nodeHash: crypto.createHash('sha256').update('node binary').digest('hex'),
+    nodeVersion: '22.22.0',
     releaseVersion: 'release-1'
   }))
   return directory
@@ -44,7 +46,9 @@ describe('remote Mastra provisioning', () => {
       exec: vi.fn(async (command: string, options?: { stdinData?: Buffer | string }) => {
         commands.push({ command, stdinData: options?.stdinData })
         if (command === 'uname -m') return 'x86_64\n'
-        if (command.includes('process.versions.node')) return '22.22.0\n'
+        if (command.includes('sha256sum')) {
+          return `22.22.0:${crypto.createHash('sha256').update('node binary').digest('hex')}\n`
+        }
         return ''
       }),
       forward: vi.fn(async () => undefined)
@@ -73,7 +77,9 @@ describe('remote Mastra provisioning', () => {
       exec: vi.fn(async (command: string, options?: { stdinData?: Buffer | string }) => {
         commands.push({ command, stdinData: options?.stdinData })
         if (command === 'uname -m') return 'x86_64\n'
-        if (command.includes('process.versions.node')) return '22.22.0\n'
+        if (command.includes('sha256sum')) {
+          return `22.22.0:${crypto.createHash('sha256').update('node binary').digest('hex')}\n`
+        }
         if (command.includes('runtime.manifest')) {
           const directory = bundleDirectory
           const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'linux-x64.json'), 'utf8'))
@@ -104,5 +110,25 @@ describe('remote Mastra provisioning', () => {
     expect(result).toMatchObject({ instanceId: 'existing-instance', jwtSecret: 'existing-secret' })
     expect(commands.every(entry => entry.stdinData === undefined)).toBe(true)
     expect(commands.map(entry => entry.command).join('\n')).not.toContain('nohup node')
+  })
+
+  it('fails closed when the pinned Node binary is absent from the installed release', async () => {
+    const ssh = {
+      exec: vi.fn(async (command: string) => {
+        if (command === 'uname -m') return 'x86_64\n'
+        if (command.includes('sha256sum')) return ''
+        return ''
+      }),
+      forward: vi.fn(async () => undefined)
+    }
+    await expect(provisionRemoteMastra({
+      bundleDirectory: bundle(),
+      hermesApiKey: 'hermes-secret',
+      hermesPort: 8642,
+      pickLocalPort: async () => 49114,
+      profile: 'default',
+      ssh
+    })).rejects.toThrow(/pinned Orgo Node runtime/)
+    expect(ssh.forward).not.toHaveBeenCalled()
   })
 })

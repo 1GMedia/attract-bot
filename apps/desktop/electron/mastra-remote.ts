@@ -5,6 +5,8 @@ import path from 'node:path'
 export interface RemoteMastraBundleManifest {
   archiveHash: string
   architecture: 'arm64' | 'x64'
+  nodeHash: string
+  nodeVersion: string
   releaseVersion: string
 }
 
@@ -31,6 +33,8 @@ function validateManifest(value: unknown): RemoteMastraBundleManifest {
     !manifest ||
     !/^[a-f0-9]{64}$/.test(manifest.archiveHash || '') ||
     !['arm64', 'x64'].includes(manifest.architecture || '') ||
+    !/^[a-f0-9]{64}$/.test(manifest.nodeHash || '') ||
+    !/^\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?$/.test(manifest.nodeVersion || '') ||
     !/^[a-zA-Z0-9._-]{1,128}$/.test(manifest.releaseVersion || '')
   ) {
     throw new Error('The packaged Orgo Mastra runtime manifest is invalid.')
@@ -116,12 +120,6 @@ export async function provisionRemoteMastra(input: {
 }): Promise<RemoteMastraConnection> {
   const architecture = remoteArchitecture(await input.ssh.exec('uname -m', { timeoutMs: 10_000 }))
   const { archive, manifest } = loadRemoteMastraBundle(input.bundleDirectory, architecture)
-  const nodeVersion = (await input.ssh.exec("node -p 'process.versions.node'", { timeoutMs: 10_000 })).trim()
-  const [nodeMajor, nodeMinor] = nodeVersion.split('.').map(Number)
-  if (!Number.isFinite(nodeMajor) || nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 22)) {
-    throw new Error(`Orgo Mastra requires Node 22.22 or newer; the remote runtime reported ${nodeVersion || 'none'}.`)
-  }
-
   const releaseDirectory = `${REMOTE_ROOT}/releases/${manifest.releaseVersion}-${manifest.archiveHash.slice(0, 12)}`
   const remoteIdentity = `${manifest.releaseVersion}:${manifest.archiveHash}`
   const installedIdentity = (await input.ssh.exec(
@@ -134,6 +132,15 @@ export async function provisionRemoteMastra(input: {
       `printf '%s' '${remoteIdentity}' > ${REMOTE_ROOT}/runtime.manifest`,
       { stdinData: archive, timeoutMs: 5 * 60_000 }
     )
+  }
+  const bundledNodeIdentity = (await input.ssh.exec(
+    `test -x ${releaseDirectory}/node && ` +
+    `printf '%s:' "$(${releaseDirectory}/node -p 'process.versions.node')" && ` +
+    `sha256sum ${releaseDirectory}/node | awk '{print $1}' || true`,
+    { timeoutMs: 10_000 }
+  )).trim()
+  if (bundledNodeIdentity !== `${manifest.nodeVersion}:${manifest.nodeHash}`) {
+    throw new Error('The pinned Orgo Node runtime is missing or does not match its bundle manifest.')
   }
 
   const existingEnvironment = await input.ssh.exec(
@@ -166,7 +173,7 @@ export async function provisionRemoteMastra(input: {
       `if test -s ${REMOTE_ROOT}/runtime.pid; then old="$(cat ${REMOTE_ROOT}/runtime.pid)"; ` +
       `kill "$old" 2>/dev/null || true; fi; ` +
       `set -a; . ${REMOTE_ROOT}/runtime.env; set +a; ` +
-      `nohup node ${releaseDirectory}/index.mjs >> ${REMOTE_ROOT}/logs/runtime.log 2>&1 < /dev/null & ` +
+      `nohup ${releaseDirectory}/node ${releaseDirectory}/index.mjs >> ${REMOTE_ROOT}/logs/runtime.log 2>&1 < /dev/null & ` +
       `echo $! > ${REMOTE_ROOT}/runtime.pid`,
       { timeoutMs: 10_000 }
     )

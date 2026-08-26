@@ -25,12 +25,24 @@ if (!/^[a-zA-Z0-9._-]{1,128}$/.test(releaseVersion)) {
 
 fs.mkdirSync(destination, { recursive: true })
 const archivePath = path.join(destination, `linux-${architecture}.tar.gz`)
+const nodePath = process.execPath
+const nodeHash = crypto.createHash('sha256').update(fs.readFileSync(nodePath)).digest('hex')
+const nodeVersion = process.versions.node
 
-execFileSync('tar', ['-czf', archivePath, '-C', outputDirectory, '.'], { stdio: 'inherit' })
+const [nodeMajor, nodeMinor] = nodeVersion.split('.').map(Number)
+if (nodeMajor < 22 || (nodeMajor === 22 && nodeMinor < 22)) {
+  throw new Error(`Remote Mastra bundles require Node 22.22 or newer; received ${nodeVersion}.`)
+}
+
+execFileSync('tar', [
+  '-czf', archivePath,
+  '-C', outputDirectory, '.',
+  '-C', path.dirname(nodePath), `--transform=s,^${path.basename(nodePath)}$,node,`, path.basename(nodePath)
+], { stdio: 'inherit' })
 const archiveHash = crypto.createHash('sha256').update(fs.readFileSync(archivePath)).digest('hex')
 fs.writeFileSync(
   path.join(destination, `linux-${architecture}.json`),
-  `${JSON.stringify({ archiveHash, architecture, releaseVersion }, null, 2)}\n`,
+  `${JSON.stringify({ archiveHash, architecture, nodeHash, nodeVersion, releaseVersion }, null, 2)}\n`,
   { mode: 0o644 }
 )
 
