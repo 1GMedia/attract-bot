@@ -174,6 +174,9 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   },
   mastra: {
     getStatus: () => ipcRenderer.invoke('hermes:mastra:status'),
+    listMessages: request => ipcRenderer.invoke('hermes:mastra:messages:list', request),
+    startTurn: input => ipcRenderer.invoke('hermes:mastra:turns:start', input),
+    cancelTurn: input => ipcRenderer.invoke('hermes:mastra:turns:cancel', input),
     listRuns: request => ipcRenderer.invoke('hermes:mastra:runs:list', request),
     getRun: runId => ipcRenderer.invoke('hermes:mastra:runs:get', runId),
     startRun: input => ipcRenderer.invoke('hermes:mastra:runs:start', input),

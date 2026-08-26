@@ -1,6 +1,9 @@
 import crypto from 'node:crypto'
 
 import type {
+  MastraCancelTurnInput,
+  MastraListMessagesRequest,
+  MastraListMessagesResponse,
   MastraListRunsRequest,
   MastraListRunsResponse,
   MastraResolveApprovalInput,
@@ -9,13 +12,16 @@ import type {
   MastraRunMutation,
   MastraRunSummary,
   MastraRuntimeStatus,
-  MastraStartRunInput
+  MastraStartRunInput,
+  MastraStartTurnInput,
+  MastraTurnSummary
 } from '@hermes/shared/mastra-runs'
 
 export interface MastraRuntimeConnection {
   baseUrl: string
   instanceId: string
   jwtSecret: string
+  mode?: 'local' | 'remote'
 }
 
 const EMPTY_CAPABILITIES = {
@@ -66,6 +72,16 @@ function queryString(request: MastraListRunsRequest): string {
   return encoded ? `?${encoded}` : ''
 }
 
+function messageQueryString(request: MastraListMessagesRequest): string {
+  const params = new URLSearchParams({ threadId: request.threadId })
+
+  if (request.cursor) {params.set('cursor', request.cursor)}
+
+  if (request.limit) {params.set('limit', String(request.limit))}
+
+  return `?${params.toString()}`
+}
+
 function errorMessage(value: unknown): string {
   if (value && typeof value === 'object') {
     const nested = (value as any).error
@@ -87,7 +103,7 @@ export class MastraControlClient {
 
   attach(connection: MastraRuntimeConnection): void {
     this.connection = connection
-    this.mode = 'local'
+    this.mode = connection.mode || 'local'
     this.unavailableReason = ''
   }
 
@@ -132,7 +148,7 @@ export class MastraControlClient {
         available: true,
         capabilities: { ...EMPTY_CAPABILITIES, ...body.capabilities },
         instanceId: this.connection.instanceId,
-        mode: 'local',
+        mode: this.mode,
         service: 'hermes-mastra-local'
       }
     } catch (error) {
@@ -140,7 +156,7 @@ export class MastraControlClient {
         available: false,
         capabilities: EMPTY_CAPABILITIES,
         instanceId: this.connection.instanceId,
-        mode: 'local',
+        mode: this.mode,
         reason: error instanceof Error ? error.message : 'Mastra health check failed.',
         service: 'hermes-mastra-local'
       }
@@ -175,6 +191,40 @@ export class MastraControlClient {
     const query = after ? `?after=${encodeURIComponent(after)}` : ''
 
     return this.request(`/korgo/runs/events${query}`)
+  }
+
+  listMessages(request: MastraListMessagesRequest): Promise<MastraListMessagesResponse> {
+    return this.request(`/korgo/messages${messageQueryString(request)}`)
+  }
+
+  importHermesHistory(input: {
+    messages: Array<{ content: string; createdAt: string; id: string; role: 'assistant' | 'user' }>
+    profile: string
+    threadId: string
+    workspaceId: string
+  }): Promise<{ imported: number; skipped: number }> {
+    return this.mutate('/korgo/threads/import', {
+      ...input,
+      instanceId: this.requireConnection().instanceId
+    })
+  }
+
+  syncKnowledgeSources(input: {
+    sources: Array<{ content: string; contentHash: string; path: string; sourceId: string }>
+    workspaceId: string
+  }): Promise<{ sources: Array<{ contentHash: string; sourceId: string; version: number }> }> {
+    return this.mutate('/korgo/knowledge/sources', {
+      ...input,
+      instanceId: this.requireConnection().instanceId
+    })
+  }
+
+  startTurn(input: MastraStartTurnInput): Promise<MastraTurnSummary> {
+    return this.mutate('/korgo/turns', { ...input, instanceId: this.requireConnection().instanceId })
+  }
+
+  cancelTurn(input: MastraCancelTurnInput): Promise<MastraTurnSummary> {
+    return this.mutate(`/korgo/turns/${encodeURIComponent(input.turnId)}/cancel`, input)
   }
 
   private requireConnection(): MastraRuntimeConnection {

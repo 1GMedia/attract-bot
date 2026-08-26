@@ -26,6 +26,7 @@
     "profile:main:cpu": "tsc -p tsconfig.electron.json --noEmit && wait-on http://127.0.0.1:5174 && node scripts/bundle-electron-main.mjs --dev && cross-env XCURSOR_SIZE=24 NODE_OPTIONS=--cpu-prof HERMES_DESKTOP_DEV_SERVER=http://127.0.0.1:5174 electron .",
     "start": "npm run build && electron .",
     "build:mastra": "npm --workspace @hermes/mastra run build",
+    "package:mastra:remote": "node scripts/package-remote-mastra.mjs",
     "prebuild": "npm run clean && npm run build:mastra",
     "build": "node scripts/assert-root-install.mjs && node scripts/write-build-stamp.mjs && vite build && node scripts/bundle-electron-main.mjs && node scripts/stage-native-deps.mjs",
     "postbuild": "node scripts/assert-dist-built.mjs",
@@ -56,7 +57,7 @@
     "test:desktop:all": "node scripts/test-desktop.mjs all",
     "test:desktop:dmg": "node scripts/test-desktop.mjs dmg",
     "test:desktop:nsis": "node scripts/test-desktop.mjs nsis",
-    "test:mastra-control": "vitest run --project electron electron/mastra-backend.test.ts electron/mastra-control.test.ts electron/mastra-restart.test.ts",
+    "test:mastra-control": "vitest run --project electron electron/mastra-backend.test.ts electron/mastra-control.test.ts electron/mastra-history.test.ts electron/mastra-remote.test.ts electron/mastra-restart.test.ts",
     "test:desktop:existing": "node scripts/test-desktop.mjs existing",
     "test:desktop:fresh": "node scripts/test-desktop.mjs fresh",
     "typecheck": "tsc -p . --noEmit && tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
@@ -236,6 +237,25 @@
       {
         "from": "../../hermes_cli/orgo_agent_mcp.py",
         "to": "orgo/orgo-agent-mcp.py"
+      },
+      {
+        "from": "../../AGENTS.md",
+        "to": "mastra-knowledge/AGENTS.md"
+      },
+      {
+        "from": "../../README.md",
+        "to": "mastra-knowledge/README.md"
+      },
+      {
+        "from": "../../docs",
+        "to": "mastra-knowledge/docs",
+        "filter": [
+          "bot-product-release-scope.md",
+          "profile-routing.md",
+          "relay-connector-contract.md",
+          "session-lifecycle.md",
+          "upstream-hermes-agent.md"
+        ]
       }
     ],
     "asar": true,

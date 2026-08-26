@@ -33,4 +33,31 @@ describe('Mastra runtime configuration', () => {
     expect(normalizeProfile('client_01')).toBe('client_01')
     expect(() => normalizeProfile('../client')).toThrow(/profile/)
   })
+
+  it('uses the authenticated Hermes model-only bridge without copying provider credentials', () => {
+    const config = createRuntimeConfig({
+      KORGO_HERMES_API_KEY: 'desktop-hermes-key',
+      KORGO_HERMES_PROFILE: 'agency',
+      KORGO_HERMES_URL: 'https://hermes.example.com',
+      OPENAI_API_KEY: 'provider-secret-that-must-stay-in-hermes'
+    })
+
+    expect(config.modelBoundary).toBe('hermes-model-only')
+    expect(config.modelConfigured).toBe(true)
+    expect(config.model).toMatchObject({
+      providerId: 'hermes-model',
+      modelId: 'active',
+      url: 'https://hermes.example.com/p/agency/v1/model',
+      apiKey: 'desktop-hermes-key'
+    })
+    expect(JSON.stringify(config.model)).not.toContain('provider-secret-that-must-stay-in-hermes')
+  })
+
+  it('fails closed without the Hermes bridge unless direct development is explicit', () => {
+    expect(createRuntimeConfig({ OPENAI_API_KEY: 'provider-key' }).modelConfigured).toBe(false)
+    expect(createRuntimeConfig({
+      KORGO_MASTRA_ALLOW_DIRECT_MODEL: '1',
+      OPENAI_API_KEY: 'provider-key'
+    }).modelBoundary).toBe('direct-development')
+  })
 })

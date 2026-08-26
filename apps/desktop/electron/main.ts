@@ -164,8 +164,10 @@ import { createHudSnapShortcut } from './hud-snap-shortcut'
 import { buildHudWindowUrl } from './hud-url'
 import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle } from './link-title-window'
 import { ensureMainWindow } from './main-window-lifecycle'
-import { buildMastraSpawnSpec, waitForMastraReady } from './mastra-backend'
+import { approvedKnowledgeSourcePaths, buildMastraSpawnSpec, waitForMastraReady } from './mastra-backend'
 import { MastraControlClient } from './mastra-control'
+import { mapHermesHistory } from './mastra-history'
+import { provisionRemoteMastra } from './mastra-remote'
 import { BoundedRestartBudget } from './mastra-restart'
 import {
   oauthGuardMayHardFail,
@@ -1145,9 +1147,14 @@ function registerMediaProtocol() {
 let mainWindow = null
 const backendConnectionState = createBackendConnectionState<ReturnType<typeof spawn>, any>()
 let mastraProcess: ReturnType<typeof spawn> | null = null
+let mastraRemoteTunnel: { localPort: number; remotePort: number; ssh: any } | null = null
 const mastraControl = new MastraControlClient()
 const mastraEventSubscribers = new Map<number, WebContents>()
 const mastraKnownRunStates = new Map<string, string>()
+const mastraKnownTurnStates = new Map<string, string>()
+const mastraKnownMessageIds = new Set<string>()
+const mastraImportedThreads = new Set<string>()
+const mastraSyncedKnowledge = new Set<string>()
 let mastraEventCursor: string | undefined
 let mastraPollTimer: ReturnType<typeof setTimeout> | null = null
 let mastraPollInFlight = false
@@ -1179,10 +1186,30 @@ function trackMastraRun(run: any) {
   broadcastMastraEvent({ type: 'run-upserted', cursor: mastraEventCursor || '', run })
 }
 
+function trackMastraTurn(turn: any) {
+  if (!turn?.turnId || !turn?.state) {return}
+
+  if (mastraKnownTurnStates.get(turn.turnId) === turn.state) {return}
+  mastraKnownTurnStates.set(turn.turnId, turn.state)
+  broadcastMastraEvent({ type: 'turn-upserted', cursor: mastraEventCursor || '', turn })
+}
+
+function trackMastraMessage(message: any) {
+  if (!message?.id || mastraKnownMessageIds.has(message.id)) {return}
+  mastraKnownMessageIds.add(message.id)
+  broadcastMastraEvent({ type: 'message-upserted', cursor: mastraEventCursor || '', message })
+}
+
 function mastraHasActiveRuns() {
-  return [...mastraKnownRunStates.values()].some(state =>
+  const activeRun = [...mastraKnownRunStates.values()].some(state =>
     ['awaiting-approval', 'preparing', 'queued', 'running'].includes(state)
   )
+
+  const activeTurn = [...mastraKnownTurnStates.values()].some(state =>
+    ['awaiting-tool-approval', 'queued', 'responding', 'running-tool'].includes(state)
+  )
+
+  return activeRun || activeTurn
 }
 
 function stopMastraPolling() {
@@ -1206,6 +1233,8 @@ async function pollMastraEvents() {
     const update = await mastraControl.pollEvents(mastraEventCursor)
     mastraEventCursor = update.cursor
     update.runs.forEach(trackMastraRun)
+    update.turns?.forEach(trackMastraTurn)
+    update.messages?.forEach(trackMastraMessage)
   } catch (error) {
     rememberLog(`[mastra] run update poll failed: ${error?.message || error}`)
   } finally {
@@ -1220,9 +1249,15 @@ async function broadcastMastraStatus() {
 
 function stopMastraBackend(options: { mode?: 'local' | 'remote'; reason?: string } = {}) {
   const child = mastraProcess
+  const remoteTunnel = mastraRemoteTunnel
   mastraProcess = null
+  mastraRemoteTunnel = null
   mastraEventCursor = undefined
   mastraKnownRunStates.clear()
+  mastraKnownTurnStates.clear()
+  mastraKnownMessageIds.clear()
+  mastraImportedThreads.clear()
+  mastraSyncedKnowledge.clear()
   stopMastraPolling()
 
   if (mastraRestartTimer) {clearTimeout(mastraRestartTimer)}
@@ -1237,6 +1272,10 @@ function stopMastraBackend(options: { mode?: 'local' | 'remote'; reason?: string
 
   if (child && !child.killed) {
     stopBackendChild(child)
+  }
+
+  if (remoteTunnel) {
+    void remoteTunnel.ssh.cancelForward(remoteTunnel.localPort, remoteTunnel.remotePort).catch(() => undefined)
   }
 }
 
@@ -1342,6 +1381,73 @@ async function startMastraBackend(options: {
   stopMastraBackend()
   mastraLaunchOptions = { ...options }
   await launchMastraBackend(options)
+}
+
+async function startRemoteMastraBackend(connection: any) {
+  stopMastraBackend({ mode: 'remote', reason: 'Connecting to the Orgo Mastra runtime.' })
+
+  if (connection.remoteKind !== 'ssh' || !connection.token) {
+    mastraControl.detach({
+      mode: 'remote',
+      reason: 'Remote Mastra requires the Korgo Bot Tailscale SSH connection.'
+    })
+
+    return
+  }
+
+  const scope = sshScopeKey(primaryProfileKey())
+  const remoteState = sshConnections.get(scope)
+
+  if (!remoteState?.ssh || !remoteState.remotePort) {
+    mastraControl.detach({ mode: 'remote', reason: 'The shared Orgo SSH owner is not available for Mastra.' })
+
+    return
+  }
+
+  const bundleDirectory = app.isPackaged
+    ? path.join(process.resourcesPath, 'mastra-remote')
+    : path.join(process.cwd(), 'build', 'mastra-remote')
+
+  try {
+    const remote = await provisionRemoteMastra({
+      bundleDirectory,
+      hermesApiKey: connection.token,
+      hermesPort: remoteState.remotePort,
+      pickLocalPort: pickLocalPort as () => Promise<number>,
+      profile: primaryProfileKey(),
+      ssh: remoteState.ssh
+    })
+
+    mastraRemoteTunnel = { localPort: remote.localPort, remotePort: remote.remotePort, ssh: remoteState.ssh }
+    await waitForMastraReady({
+      healthUrl: `${remote.baseUrl}/korgo/health`,
+      child: { exitCode: null, killed: false },
+      expectedInstanceId: remote.instanceId,
+      timeoutMs: 45_000
+    })
+    mastraControl.attach({
+      baseUrl: remote.baseUrl,
+      instanceId: remote.instanceId,
+      jwtSecret: remote.jwtSecret,
+      mode: 'remote'
+    })
+    void broadcastMastraStatus()
+    scheduleMastraPoll()
+    rememberLog(`[mastra] Orgo orchestration runtime ${remote.runtimeVersion} is ready`)
+  } catch (error) {
+    if (mastraRemoteTunnel) {
+      void mastraRemoteTunnel.ssh
+        .cancelForward(mastraRemoteTunnel.localPort, mastraRemoteTunnel.remotePort)
+        .catch(() => undefined)
+      mastraRemoteTunnel = null
+    }
+
+    mastraControl.detach({
+      mode: 'remote',
+      reason: error instanceof Error ? error.message : 'The Orgo Mastra runtime could not start.'
+    })
+    void broadcastMastraStatus()
+  }
 }
 
 const remoteLiveness = new RemoteLivenessTracker()
@@ -9309,10 +9415,7 @@ async function startHermes() {
     })
 
     if (setup.kind === 'remote') {
-      stopMastraBackend({
-        mode: 'remote',
-        reason: 'Local Mastra orchestration is unavailable for remote Hermes profiles.'
-      })
+      await startRemoteMastraBackend(setup.connection)
 
       return setup.connection
     }
@@ -10800,9 +10903,83 @@ function createWindow() {
 
 ipcMain.handle('hermes:connection', async (_event, profile) => ensureBackend(profile))
 ipcMain.handle('hermes:mastra:status', async () => mastraControl.getStatus())
+ipcMain.handle('hermes:mastra:messages:list', async (_event, request) => mastraControl.listMessages(request))
+
+async function ensureMastraThreadHistory(input: any) {
+  const instanceId = mastraControl.instanceId
+  const profile = String(input?.profile || 'default')
+  const threadId = String(input?.threadId || '')
+  const workspaceId = String(input?.workspaceId || '')
+  const migrationKey = `${instanceId || 'unavailable'}:${profile}:${threadId}`
+
+  if (!threadId || !workspaceId || mastraImportedThreads.has(migrationKey)) {return}
+  const query = new URLSearchParams({ limit: '500', order: 'latest', profile })
+
+  const request = {
+    method: 'GET',
+    path: `/api/sessions/${encodeURIComponent(threadId)}/messages?${query}`,
+    profile
+  }
+
+  const transcript = (await interceptSessionRequestForRemote(request)) ??
+    await fetchJsonForProfile(profile, request.path)
+
+  const messages = mapHermesHistory(transcript?.messages, profile, threadId)
+  await mastraControl.importHermesHistory({ messages, profile, threadId, workspaceId })
+  mastraImportedThreads.add(migrationKey)
+}
+
+async function ensureRemoteMastraKnowledge(workspaceIdValue: unknown) {
+  if (!mastraRemoteTunnel) {return}
+  const workspaceId = String(workspaceIdValue || '').trim()
+
+  if (!workspaceId) {throw new Error('A workspace identity is required before syncing Orgo knowledge.')}
+
+  const knowledgeRoot = app.isPackaged
+    ? path.join(process.resourcesPath, 'mastra-knowledge')
+    : path.resolve(APP_ROOT, '../..')
+
+  const sources = approvedKnowledgeSourcePaths(knowledgeRoot).map(sourcePath => {
+    const content = fs.readFileSync(sourcePath, 'utf8')
+    const logicalPath = path.relative(knowledgeRoot, sourcePath).split(path.sep).join('/')
+
+    return {
+      content,
+      contentHash: crypto.createHash('sha256').update(content).digest('hex'),
+      path: logicalPath,
+      sourceId: `${workspaceId}:${logicalPath}`
+    }
+  })
+
+  const identity = crypto.createHash('sha256')
+    .update(`${mastraControl.instanceId}\0${workspaceId}\0${sources.map(source => source.contentHash).join('\0')}`)
+    .digest('hex')
+
+  if (mastraSyncedKnowledge.has(identity)) {return}
+  await mastraControl.syncKnowledgeSources({ sources, workspaceId })
+  mastraSyncedKnowledge.add(identity)
+}
+
+ipcMain.handle('hermes:mastra:turns:start', async (_event, input) => {
+  await ensureRemoteMastraKnowledge(input?.workspaceId)
+  await ensureMastraThreadHistory(input)
+  const turn = await mastraControl.startTurn(input)
+  trackMastraTurn(turn)
+  scheduleMastraPoll()
+
+  return turn
+})
+ipcMain.handle('hermes:mastra:turns:cancel', async (_event, input) => {
+  const turn = await mastraControl.cancelTurn(input)
+  trackMastraTurn(turn)
+  scheduleMastraPoll()
+
+  return turn
+})
 ipcMain.handle('hermes:mastra:runs:list', async (_event, request) => mastraControl.listRuns(request || {}))
 ipcMain.handle('hermes:mastra:runs:get', async (_event, runId) => mastraControl.getRun(String(runId || '')))
 ipcMain.handle('hermes:mastra:runs:start', async (_event, input) => {
+  await ensureRemoteMastraKnowledge(input?.workspaceId)
   const run = await mastraControl.startRun(input)
   trackMastraRun(run)
   scheduleMastraPoll()

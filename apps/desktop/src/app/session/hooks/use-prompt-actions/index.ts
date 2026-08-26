@@ -1,4 +1,5 @@
 import type { AppendMessage, ThreadMessage } from '@assistant-ui/react'
+import type { MastraRunEvent } from '@hermes/shared/mastra-runs'
 import { useStore } from '@nanostores/react'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 
@@ -269,6 +270,56 @@ export function usePromptActions({
 }: PromptActionsOptions) {
   const { t } = useI18n()
   const copy = t.desktop
+
+  useEffect(() => window.hermesDesktop?.mastra?.onEvent?.((event: MastraRunEvent) => {
+    const threadId = event.message?.threadId || event.turn?.threadId
+
+    if (!threadId) {return}
+
+    const runtimeId = getRuntimeIdForStoredSession(threadId) ||
+      (selectedStoredSessionIdRef.current === threadId ? activeSessionIdRef.current : null)
+
+    if (!runtimeId) {return}
+
+    if (event.type === 'message-upserted' && event.message?.role === 'assistant') {
+      const messageId = `mastra:${event.message.id}`
+      updateSessionState(runtimeId, state => {
+        if (state.messages.some(message => message.id === messageId)) {return state}
+
+        return {
+          ...state,
+          messages: [...state.messages, {
+            id: messageId,
+            role: 'assistant',
+            parts: [textPart(event.message!.content)],
+            timestamp: new Date(event.message!.createdAt).valueOf()
+          }],
+          sawAssistantPayload: true
+        }
+      }, threadId)
+    }
+
+    if (event.type === 'turn-upserted' && event.turn) {
+      const working = ['queued', 'responding', 'running-tool'].includes(event.turn.state)
+      updateSessionState(runtimeId, state => ({
+        ...state,
+        awaitingResponse: working,
+        busy: working,
+        ...(event.turn?.state === 'failed' && event.turn.error
+          ? {
+              messages: state.messages.some(message => message.id === `mastra-error:${event.turn!.turnId}`)
+                ? state.messages
+                : [...state.messages, {
+                    id: `mastra-error:${event.turn!.turnId}`,
+                    role: 'assistant',
+                    parts: [],
+                    error: event.turn!.error!.message
+                  }]
+            }
+          : {})
+      }), threadId)
+    }
+  }) ?? (() => {}), [activeSessionIdRef, getRuntimeIdForStoredSession, selectedStoredSessionIdRef, updateSessionState])
 
   const appendSessionTextMessage = useCallback(
     (

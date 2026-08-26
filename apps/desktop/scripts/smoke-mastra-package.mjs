@@ -43,6 +43,15 @@ let child
 let output = ''
 
 const fakeHermes = createServer((request, response) => {
+  if (request.method === 'POST' && request.url?.endsWith('/v1/model/chat/completions')) {
+    response.writeHead(200, { 'Content-Type': 'application/json' })
+    response.end(JSON.stringify({
+      id: 'packaged-smoke-model-completion',
+      choices: [{ message: { content: 'Require approval, then retain completion evidence.' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 6, completion_tokens: 6, total_tokens: 12 }
+    }))
+    return
+  }
   if (request.method !== 'POST' || !request.url?.endsWith('/v1/chat/completions')) {
     response.writeHead(404).end()
     return
@@ -118,13 +127,19 @@ async function request(path, init = {}) {
 }
 
 async function waitForRun(runId, predicate, description) {
+  let lastRun
   for (let attempt = 0; attempt < 120; attempt += 1) {
     const { body, response } = await request(`/korgo/runs/${encodeURIComponent(runId)}`)
     if (!response.ok) throw new Error(`Packaged run lookup returned ${response.status}.`)
+    lastRun = body
     if (predicate(body)) return body
     await new Promise(resolve => setTimeout(resolve, 250))
   }
-  throw new Error(`Timed out waiting for packaged run to ${description}.`)
+  throw new Error([
+    `Timed out waiting for packaged run to ${description}.`,
+    `Last run: ${JSON.stringify(lastRun)}`,
+    `Runtime output:\n${output.slice(-4_000)}`
+  ].join('\n'))
 }
 
 try {

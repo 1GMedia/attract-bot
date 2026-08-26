@@ -2072,6 +2072,7 @@ class APIServerAdapter(BasePlatformAdapter):
             ("POST", "/api/sessions/{session_id}/chat", self._handle_session_chat),
             ("POST", "/api/sessions/{session_id}/chat/stream", self._handle_session_chat_stream),
             ("POST", "/api/sessions/{session_id}/model", self._handle_session_model_lock),
+            ("POST", "/v1/model/chat/completions", self._handle_model_chat_completions),
             ("POST", "/v1/chat/completions", self._handle_chat_completions),
             ("POST", "/v1/responses", self._handle_responses),
             ("GET", "/v1/responses/{response_id}", self._handle_get_response),
@@ -4098,6 +4099,99 @@ class APIServerAdapter(BasePlatformAdapter):
             "session_id": session_id,
             "runtime": runtime,
         })
+    @_admit_api_agent_request
+    async def _handle_model_chat_completions(self, request: "web.Request") -> "web.Response":
+        """Authenticated provider bridge for Mastra; never constructs an action-capable Hermes agent."""
+        limited = self._concurrency_limited_response()
+        if limited is not None:
+            return limited
+
+        try:
+            body = await request.json()
+        except (json.JSONDecodeError, Exception):
+            return web.json_response(_openai_error("Invalid JSON in request body"), status=400)
+
+        messages = body.get("messages")
+        if not messages or not isinstance(messages, list):
+            return web.json_response(
+                _openai_error("Missing or invalid 'messages' field"),
+                status=400,
+            )
+
+        # This route deliberately bypasses AIAgent. That is the security boundary:
+        # no Hermes tools, skills, memory, terminal, session transcript, or context
+        # files are initialized. Only caller-supplied model schemas are forwarded.
+        try:
+            from agent.auxiliary_client import get_async_text_auxiliary_client
+
+            client, model = get_async_text_auxiliary_client(task="mastra_model")
+            if client is None or not model:
+                return web.json_response(
+                    _openai_error("The active Hermes profile has no model provider authentication."),
+                    status=503,
+                )
+
+            allowed = {
+                "frequency_penalty",
+                "logit_bias",
+                "max_completion_tokens",
+                "max_tokens",
+                "messages",
+                "parallel_tool_calls",
+                "presence_penalty",
+                "response_format",
+                "seed",
+                "stop",
+                "stream",
+                "stream_options",
+                "temperature",
+                "tool_choice",
+                "tools",
+                "top_p",
+            }
+            kwargs = {key: value for key, value in body.items() if key in allowed}
+            kwargs["model"] = model
+            completion = await client.chat.completions.create(**kwargs)
+
+            if not _coerce_request_bool(body.get("stream"), default=False):
+                if hasattr(completion, "model_dump"):
+                    payload = completion.model_dump(exclude_none=True)
+                elif isinstance(completion, dict):
+                    payload = completion
+                else:
+                    raise TypeError("Provider returned an unsupported completion envelope")
+                response = web.json_response(payload)
+                response.headers["X-Hermes-Model-Only"] = "true"
+                return response
+
+            response = web.StreamResponse(
+                status=200,
+                headers={
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Hermes-Model-Only": "true",
+                },
+            )
+            await response.prepare(request)
+            async for chunk in completion:
+                if hasattr(chunk, "model_dump_json"):
+                    encoded = chunk.model_dump_json(exclude_none=True)
+                elif isinstance(chunk, dict):
+                    encoded = json.dumps(chunk)
+                else:
+                    continue
+                await response.write(f"data: {encoded}\n\n".encode("utf-8"))
+            await response.write(b"data: [DONE]\n\n")
+            await response.write_eof()
+            return response
+        except Exception as exc:
+            logger.warning("Mastra model-only bridge failed (%s)", type(exc).__name__)
+            return web.json_response(
+                _openai_error("Hermes model-only provider bridge failed", err_type="server_error"),
+                status=502,
+            )
+
     @_admit_api_agent_request
     async def _handle_chat_completions(self, request: "web.Request") -> "web.Response":
         """POST /v1/chat/completions — OpenAI Chat Completions format."""

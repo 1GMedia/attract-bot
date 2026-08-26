@@ -314,6 +314,7 @@ def _create_app(adapter: APIServerAdapter) -> web.Application:
     app.router.add_get("/v1/toolsets", adapter._handle_toolsets)
     app.router.add_post("/api/sessions/{session_id}/chat", adapter._handle_session_chat)
     app.router.add_post("/api/sessions/{session_id}/chat/stream", adapter._handle_session_chat_stream)
+    app.router.add_post("/v1/model/chat/completions", adapter._handle_model_chat_completions)
     app.router.add_post("/v1/chat/completions", adapter._handle_chat_completions)
     app.router.add_post("/v1/responses", adapter._handle_responses)
     app.router.add_get("/v1/responses/{response_id}", adapter._handle_get_response)
@@ -958,6 +959,68 @@ class TestToolsetsEndpoint:
 # ---------------------------------------------------------------------------
 # /v1/chat/completions endpoint
 # ---------------------------------------------------------------------------
+
+
+class TestModelOnlyCompletionsEndpoint:
+    @pytest.mark.asyncio
+    async def test_forwards_model_tools_without_constructing_a_hermes_agent(self, auth_adapter):
+        completion = MagicMock()
+        completion.model_dump.return_value = {
+            "id": "chatcmpl-model-only",
+            "choices": [{
+                "index": 0,
+                "finish_reason": "tool_calls",
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "observe-orgo-computer", "arguments": "{\"objective\":\"look\"}"},
+                    }],
+                },
+            }],
+        }
+        create = AsyncMock(return_value=completion)
+        client = types.SimpleNamespace(
+            chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=create)),
+        )
+        app = _create_app(auth_adapter)
+        async with TestClient(TestServer(app)) as cli:
+            with (
+                patch("agent.auxiliary_client.get_async_text_auxiliary_client", return_value=(client, "active-model")),
+                patch.object(auth_adapter, "_create_agent") as create_agent,
+            ):
+                resp = await cli.post(
+                    "/v1/model/chat/completions",
+                    headers={"Authorization": "Bearer sk-secret"},
+                    json={
+                        "model": "hermes/model-only",
+                        "messages": [{"role": "user", "content": "Observe Orgo"}],
+                        "tools": [{
+                            "type": "function",
+                            "function": {"name": "observe-orgo-computer", "parameters": {"type": "object"}},
+                        }],
+                    },
+                )
+                response_body = await resp.json()
+
+        assert resp.status == 200
+        assert resp.headers["X-Hermes-Model-Only"] == "true"
+        assert response_body["choices"][0]["finish_reason"] == "tool_calls"
+        create_agent.assert_not_called()
+        assert create.await_args.kwargs["model"] == "active-model"
+        assert create.await_args.kwargs["tools"][0]["function"]["name"] == "observe-orgo-computer"
+
+    @pytest.mark.asyncio
+    async def test_requires_api_authentication(self, auth_adapter):
+        app = _create_app(auth_adapter)
+        async with TestClient(TestServer(app)) as cli:
+            resp = await cli.post(
+                "/v1/model/chat/completions",
+                json={"messages": [{"role": "user", "content": "hello"}]},
+            )
+        assert resp.status == 401
 
 
 class TestChatCompletionsEndpoint:
@@ -2865,4 +2928,3 @@ class TestCreateAgentModelRecovery:
         )
         adapter._create_agent(session_id="another-session", gateway_session_key="stable-chan-1")
         assert captured[1]["model"] == "minimax/minimax-m3"
-

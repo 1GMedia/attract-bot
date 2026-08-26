@@ -42,6 +42,46 @@ describe('Mastra desktop control client', () => {
     expect(JSON.stringify(init)).not.toContain('jwt-secret')
   })
 
+  it('routes supervisor turns through the authenticated control client', async () => {
+    const fetchImplementation = vi.fn(
+      async () => new Response(JSON.stringify({ turnId: 'turn-1', state: 'queued' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    ) as unknown as typeof fetch
+
+    const client = new MastraControlClient(fetchImplementation)
+    client.attach({ baseUrl: 'http://127.0.0.1:4112', instanceId: 'instance-a', jwtSecret: 'jwt-secret' })
+
+    await client.startTurn({
+      clientTurnId: 'client-1',
+      message: 'Check the Orgo desktop.',
+      profile: 'default',
+      threadId: 'chat-1',
+      workspaceId: 'workspace-1'
+    })
+
+    const [url, init] = (fetchImplementation as any).mock.calls[0]
+    expect(url).toBe('http://127.0.0.1:4112/korgo/turns')
+    expect(JSON.parse(init.body)).toMatchObject({ instanceId: 'instance-a', threadId: 'chat-1' })
+  })
+
+  it('binds remote knowledge sync to the active Mastra instance', async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({ sources: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })) as unknown as typeof fetch
+
+    const client = new MastraControlClient(fetchImplementation)
+    client.attach({ baseUrl: 'http://127.0.0.1:49112', instanceId: 'orgo-instance', jwtSecret: 'remote-jwt' })
+
+    await client.syncKnowledgeSources({ sources: [], workspaceId: '/workspace' })
+
+    const [url, init] = (fetchImplementation as any).mock.calls[0]
+    expect(url).toBe('http://127.0.0.1:49112/korgo/knowledge/sources')
+    expect(JSON.parse(init.body)).toEqual({ instanceId: 'orgo-instance', sources: [], workspaceId: '/workspace' })
+  })
+
   it('reports remote profiles as unavailable without attempting loopback access', async () => {
     const fetchImplementation = vi.fn() as unknown as typeof fetch
     const client = new MastraControlClient(fetchImplementation)
@@ -54,10 +94,34 @@ describe('Mastra desktop control client', () => {
     expect(fetchImplementation).not.toHaveBeenCalled()
   })
 
+  it('reports an attached Orgo runtime through the same status contract', async () => {
+    const fetchImplementation = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      instanceId: 'orgo-instance',
+      capabilities: { agents: true, workflows: true }
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as unknown as typeof fetch
+
+    const client = new MastraControlClient(fetchImplementation)
+    client.attach({
+      baseUrl: 'http://127.0.0.1:49112',
+      instanceId: 'orgo-instance',
+      jwtSecret: 'remote-jwt',
+      mode: 'remote'
+    })
+
+    await expect(client.getStatus()).resolves.toMatchObject({
+      available: true,
+      instanceId: 'orgo-instance',
+      mode: 'remote',
+      capabilities: { agents: true, workflows: true }
+    })
+  })
+
   it('exposes only typed IPC methods to the renderer, never auth material or unrestricted HTTP', () => {
     const preload = fs.readFileSync(path.join(import.meta.dirname, 'preload.ts'), 'utf8')
     const mastraNamespace = preload.slice(preload.indexOf('mastra: {'), preload.indexOf('mastra: {') + 1_800)
     expect(mastraNamespace).toContain("ipcRenderer.invoke('hermes:mastra:status')")
+    expect(mastraNamespace).toContain("ipcRenderer.invoke('hermes:mastra:turns:start'")
     expect(mastraNamespace).not.toMatch(/jwtSecret|KORGO_MASTRA_JWT_SECRET|baseUrl|\bfetch\s*\(/)
   })
 })

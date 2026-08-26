@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { openArtifact, upsertArtifact } from '@/store/artifacts'
+import { $mastraChatEnabled, setMastraChatEnabled } from '@/store/mastra-chat'
 import {
   $activeMastraRuns,
   $mastraRunDetails,
@@ -418,6 +420,7 @@ function FullRuns() {
   const runs = useStore($mastraRuns)
   const details = useStore($mastraRunDetails)
   const status = useStore($mastraStatus)
+  const mastraChatEnabled = useStore($mastraChatEnabled)
   const loading = useStore($mastraRunsLoading)
   const storeError = useStore($mastraRunsError)
   const cwd = useStore($currentCwd)
@@ -494,6 +497,16 @@ function FullRuns() {
             <p className="mt-1 text-xs text-(--ui-text-tertiary)">{t.runs.subtitle}</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
+            <label className="flex items-center gap-2 rounded-md border border-(--ui-stroke-secondary) px-2 text-[0.68rem] text-(--ui-text-secondary)">
+              <Switch
+                aria-label="Use Mastra for Bot conversations"
+                checked={mastraChatEnabled}
+                disabled={!status.available && !mastraChatEnabled}
+                onCheckedChange={setMastraChatEnabled}
+                size="xs"
+              />
+              {mastraChatEnabled ? 'Mastra conversations' : 'Direct Hermes compatibility'}
+            </label>
             <Button onClick={() => openRouteTile(`${RUNS_ROUTE}?mode=rail`, 'right')} size="sm" variant="outline">
               <Codicon name="layout-sidebar-right" /> {t.runs.openInSplit}
             </Button>

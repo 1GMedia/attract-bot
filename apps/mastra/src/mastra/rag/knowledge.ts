@@ -55,6 +55,15 @@ export async function ingestKnowledgeDocument(input: {
   return { sourceId: input.sourceId, chunkCount: chunks.length };
 }
 
+export async function deleteKnowledgeDocument(sourceId: string): Promise<void> {
+  const indexes = await knowledgeVectorStore.listIndexes();
+  if (!indexes.includes(KNOWLEDGE_INDEX)) return;
+  await knowledgeVectorStore.deleteVectors({
+    indexName: KNOWLEDGE_INDEX,
+    filter: { sourceId },
+  });
+}
+
 export interface KnowledgeMatch {
   score: number;
   sourceId: string;

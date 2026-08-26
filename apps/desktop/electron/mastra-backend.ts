@@ -48,6 +48,21 @@ export function resolveManagedNode(
   return candidates.find(exists) || 'node'
 }
 
+export function approvedKnowledgeSourcePaths(
+  hermesRoot: string,
+  exists: (candidate: string) => boolean = fs.existsSync
+): string[] {
+  return [
+    path.join(hermesRoot, 'AGENTS.md'),
+    path.join(hermesRoot, 'README.md'),
+    path.join(hermesRoot, 'docs', 'bot-product-release-scope.md'),
+    path.join(hermesRoot, 'docs', 'profile-routing.md'),
+    path.join(hermesRoot, 'docs', 'relay-connector-contract.md'),
+    path.join(hermesRoot, 'docs', 'session-lifecycle.md'),
+    path.join(hermesRoot, 'docs', 'upstream-hermes-agent.md')
+  ].filter(exists)
+}
+
 export function buildMastraSpawnSpec(options: {
   hermesRoot: string
   mastraDirectory?: string
@@ -65,15 +80,7 @@ export function buildMastraSpawnSpec(options: {
   const exists = options.exists || fs.existsSync
   const { output, studio } = resolveMastraOutput(mastraDirectory, exists)
 
-  const knowledgeSources = [
-    path.join(options.hermesRoot, 'AGENTS.md'),
-    path.join(options.hermesRoot, 'README.md'),
-    path.join(options.hermesRoot, 'docs', 'bot-product-release-scope.md'),
-    path.join(options.hermesRoot, 'docs', 'profile-routing.md'),
-    path.join(options.hermesRoot, 'docs', 'relay-connector-contract.md'),
-    path.join(options.hermesRoot, 'docs', 'session-lifecycle.md'),
-    path.join(options.hermesRoot, 'docs', 'upstream-hermes-agent.md')
-  ].filter(exists)
+  const knowledgeSources = approvedKnowledgeSourcePaths(options.hermesRoot, exists)
 
   if (!exists(output)) {
     throw new Error(`Mastra build output is missing at ${output}`)

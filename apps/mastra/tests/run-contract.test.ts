@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { nextKnowledgeVersion, hashKnowledgeContent } from '../src/mastra/rag/source-version.ts'
 import { redactRunText } from '../src/mastra/runs/redaction.ts'
-import { mapMastraRunState, mapMastraRunSummary } from '../src/mastra/runs/run-service.ts'
+import { bindRunToolPolicy, mapMastraRunState, mapMastraRunSummary } from '../src/mastra/runs/run-service.ts'
+import { TOOL_POLICY_VERSION } from '../src/mastra/runs/tool-policy.ts'
 
 const createdAt = new Date('2026-08-25T12:00:00.000Z')
 const updatedAt = new Date('2026-08-25T12:01:00.000Z')
@@ -58,5 +59,21 @@ describe('desktop run contract', () => {
     expect(nextKnowledgeVersion(undefined, firstHash)).toBe(1)
     expect(nextKnowledgeVersion({ contentHash: firstHash, version: 3 }, firstHash)).toBe(3)
     expect(nextKnowledgeVersion({ contentHash: firstHash, version: 3 }, nextHash)).toBe(4)
+  })
+
+  it('replaces caller-declared tool policy, preview, and risk with server values', () => {
+    expect(bindRunToolPolicy({
+      name: 'observe-orgo-computer',
+      arguments: { objective: 'Inspect safely' },
+      argumentsPreview: 'misleading preview',
+      policyVersion: 'stale-policy',
+      risk: 'read-only'
+    })).toEqual({
+      name: 'observe-orgo-computer',
+      arguments: { objective: 'Inspect safely' },
+      argumentsPreview: '{"objective":"Inspect safely"}',
+      policyVersion: TOOL_POLICY_VERSION,
+      risk: 'private-read'
+    })
   })
 })

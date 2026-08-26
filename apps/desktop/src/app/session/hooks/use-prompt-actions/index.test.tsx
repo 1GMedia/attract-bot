@@ -9,6 +9,8 @@ import { createClientSessionState } from '@/lib/chat-runtime'
 import { $composerAttachments, $composerDraft, type ComposerAttachment, setComposerDraft } from '@/store/composer'
 import { $queuedPromptsBySession, getQueuedPrompts } from '@/store/composer-queue'
 import { $hudMode } from '@/store/hud'
+import { $mastraChatEnabled } from '@/store/mastra-chat'
+import { $mastraStatus } from '@/store/mastra-runs'
 import { $notifications, clearNotifications } from '@/store/notifications'
 import {
   $busy,
@@ -45,6 +47,24 @@ vi.mock('@/hermes', () => ({
 // the stored sessions table and 404s on a runtime id. session.title accepts
 // the runtime id directly.
 const RUNTIME_SESSION_ID = 'rt-abc123'
+
+const AVAILABLE_MASTRA_STATUS = {
+  available: true,
+  capabilities: {
+    agents: true,
+    evals: true,
+    mcpServer: true,
+    memory: true,
+    observability: true,
+    rag: true,
+    storage: true,
+    studio: false,
+    workflows: true
+  },
+  instanceId: 'instance-1',
+  mode: 'local' as const,
+  service: 'hermes-mastra-local' as const
+}
 
 function sessionInfo(overrides: Partial<SessionInfo> = {}): SessionInfo {
   return {
@@ -310,6 +330,93 @@ describe('usePromptActions /title', () => {
     )
     expect(refreshSessions).not.toHaveBeenCalled()
     expect($sessions.get()[0]?.title).toBe('Old title')
+  })
+})
+
+describe('usePromptActions Mastra supervisor routing', () => {
+  const originalDesktop = window.hermesDesktop
+
+  afterEach(() => {
+    cleanup()
+    $mastraChatEnabled.set(false)
+    window.hermesDesktop = originalDesktop
+    vi.mocked(getSession).mockReset()
+    vi.restoreAllMocks()
+  })
+
+  it('sends an upgraded Bot Chat to Mastra without also submitting it directly to Hermes', async () => {
+    let onMastraEvent: ((event: any) => void) | undefined
+
+    const startTurn = vi.fn(async () => ({
+      clientTurnId: 'client-1',
+      createdAt: new Date().toISOString(),
+      instanceId: 'instance-1',
+      linkedRunIds: [],
+      profile: 'default',
+      state: 'queued',
+      threadId: 'stored-chat-1',
+      turnId: 'turn-1',
+      updatedAt: new Date().toISOString(),
+      workspaceId: '/workspace'
+    }))
+
+    window.hermesDesktop = {
+      mastra: { onEvent: vi.fn(callback => { onMastraEvent = callback;
+
+ return () => {} }), startTurn }
+    } as unknown as Window['hermesDesktop']
+    $mastraChatEnabled.set(true)
+    $mastraStatus.set(AVAILABLE_MASTRA_STATUS)
+    $currentCwd.set('/workspace')
+    vi.mocked(getSession).mockResolvedValue(sessionInfo({ id: 'stored-chat-1', profile: 'default' }))
+    const requestGateway = vi.fn(async () => ({}) as never)
+    const updated: Array<Record<string, any>> = []
+    let handle: HarnessHandle | null = null
+
+    await actRender(
+      <Harness
+        getRuntimeIdForStoredSession={id => id === 'stored-chat-1' ? RUNTIME_SESSION_ID : null}
+        onReady={value => (handle = value)}
+        onUpdateState={(_runtimeId, _storedId, state) => updated.push(state)}
+        refreshSessions={async () => undefined}
+        requestGateway={requestGateway}
+        storedSessionId="stored-chat-1"
+      />
+    )
+
+    await expect(handle!.submitText('Observe the Orgo desktop')).resolves.toBe(true)
+    expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Observe the Orgo desktop',
+      profile: 'default',
+      threadId: 'stored-chat-1',
+      workspaceId: '/workspace'
+    }))
+    expect(requestGateway).not.toHaveBeenCalledWith('prompt.submit', expect.anything(), expect.anything())
+
+    const assistantEvent = {
+      cursor: 'cursor-1',
+      message: {
+        content: 'Orgo is ready.',
+        createdAt: new Date().toISOString(),
+        id: 'message-1',
+        role: 'assistant',
+        threadId: 'stored-chat-1'
+      },
+      type: 'message-upserted'
+    }
+
+    await act(async () => {
+      onMastraEvent?.(assistantEvent)
+      onMastraEvent?.(assistantEvent)
+      onMastraEvent?.({
+        cursor: 'cursor-2',
+        turn: { state: 'succeeded', threadId: 'stored-chat-1', turnId: 'turn-1' },
+        type: 'turn-upserted'
+      })
+    })
+    const final = updated.at(-1)
+    expect(final?.messages.filter((message: any) => message.id === 'mastra:message-1')).toHaveLength(1)
+    expect(final).toMatchObject({ awaitingResponse: false, busy: false })
   })
 })
 

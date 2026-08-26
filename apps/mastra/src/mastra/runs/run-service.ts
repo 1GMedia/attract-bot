@@ -4,6 +4,7 @@ import type {
   MastraRunArtifact,
   MastraRunDetail,
   MastraRunError,
+  MastraRiskClassification,
   MastraRunState,
   MastraRunStep,
   MastraRunSummary,
@@ -14,6 +15,12 @@ import type { WorkflowRun } from '@mastra/core/storage'
 import type { WorkflowRunState, WorkflowState } from '@mastra/core/workflows'
 import { mastraRuntimeConfig } from '../runtime-config.ts'
 import { redactRunText } from './redaction.ts'
+import {
+  approvalArgumentHash,
+  previewToolArguments,
+  riskForSupervisorTool,
+  TOOL_POLICY_VERSION
+} from './tool-policy.ts'
 
 const WORKFLOW_ID = 'hermes-task-lifecycle' as const
 const APPROVAL_STEP_ID = 'await-execution-approval'
@@ -32,11 +39,28 @@ function number(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function risk(value: unknown): MastraRiskClassification | undefined {
+  return ['read-only', 'private-read', 'mutation', 'external-send', 'expensive', 'unknown'].includes(String(value))
+    ? (value as MastraRiskClassification)
+    : undefined
+}
+
 function iso(value: unknown): string | undefined {
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString()
   if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) return new Date(value).toISOString()
   return undefined
+}
+
+export function bindRunToolPolicy(
+  tool: NonNullable<MastraStartRunInput['tool']>
+): NonNullable<MastraStartRunInput['tool']> {
+  return {
+    ...tool,
+    argumentsPreview: previewToolArguments(tool.arguments),
+    policyVersion: TOOL_POLICY_VERSION,
+    risk: riskForSupervisorTool(tool.name)
+  }
 }
 
 function snapshotOf(run: WorkflowRun): Snapshot {
@@ -173,6 +197,9 @@ export function mapMastraRunSummary(
     .sort()[0]
   const finishedAt = ['cancelled', 'failed', 'succeeded'].includes(state) ? updatedAt.toISOString() : undefined
   const instructions = string(input.instructions) || ''
+  const origin = object(input.origin)
+  const tool = object(input.tool)
+  const runtime = object(input.runtime)
   const suspendedStep = steps.find(step => step.state === 'suspended')?.id || APPROVAL_STEP_ID
   const score = number(evidence.score)
   const evidenceStatus = score === 1 ? 'verified' : score === undefined ? 'missing' : 'partial'
@@ -192,6 +219,20 @@ export function mapMastraRunSummary(
       ...(score !== undefined ? { score } : {}),
       ...(string(evidence.reason) ? { reason: string(evidence.reason) } : {})
     },
+    ...(string(origin.threadId) ? { originThreadId: string(origin.threadId) } : {}),
+    ...(string(origin.turnId) ? { originTurnId: string(origin.turnId) } : {}),
+    ...(string(origin.toolCallId) ? { originToolCallId: string(origin.toolCallId) } : {}),
+    ...(string(tool.name) ? { toolName: string(tool.name) } : {}),
+    ...(string(tool.argumentsPreview)
+      ? { toolArgumentsPreview: redactRunText(string(tool.argumentsPreview)) }
+      : {}),
+    ...(string(tool.policyVersion) ? { policyVersion: string(tool.policyVersion) } : {}),
+    ...(risk(tool.risk) ? { risk: risk(tool.risk) } : {}),
+    ...(runtime.location === 'local' || runtime.location === 'orgo'
+      ? { runtimeLocation: runtime.location }
+      : {}),
+    ...(string(runtime.remoteConnectionId) ? { remoteConnectionId: string(runtime.remoteConnectionId) } : {}),
+    ...(string(runtime.version) ? { runtimeVersion: string(runtime.version) } : {}),
     ...(string(input.parentRunId) ? { parentRunId: string(input.parentRunId) } : {}),
     ...(startedAt ? { startedAt } : {}),
     ...(finishedAt ? { finishedAt } : {}),
@@ -205,7 +246,17 @@ export function mapMastraRunSummary(
             workspaceId: string(input.workspaceId) || 'unknown',
             taskId: string(input.taskId) || runId,
             profile: string(input.profile) || mastraRuntimeConfig.hermes.defaultProfile,
-            instructionsPreview: redactRunText(instructions.slice(0, 240)) || ''
+            instructionsPreview: redactRunText(instructions.slice(0, 240)) || '',
+            ...(string(origin.threadId) ? { originThreadId: string(origin.threadId) } : {}),
+            ...(string(origin.turnId) ? { originTurnId: string(origin.turnId) } : {}),
+            ...(string(origin.toolCallId) ? { originToolCallId: string(origin.toolCallId) } : {}),
+            ...(string(tool.name) ? { toolName: string(tool.name) } : {}),
+            ...(string(tool.argumentsPreview)
+              ? { toolArgumentsPreview: redactRunText(string(tool.argumentsPreview)) }
+              : {}),
+            ...(string(tool.argumentHash) ? { argumentHash: string(tool.argumentHash) } : {}),
+            ...(string(tool.policyVersion) ? { policyVersion: string(tool.policyVersion) } : {}),
+            ...(risk(tool.risk) ? { risk: risk(tool.risk) } : {})
           }
         }
       : {})
@@ -282,7 +333,22 @@ export async function getRun(mastra: Mastra, runId: string): Promise<MastraRunDe
 
 export async function startRun(mastra: Mastra, input: MastraStartRunInput): Promise<MastraRunSummary> {
   const run = await workflow(mastra).createRun({ resourceId: input.workspaceId })
-  await run.startAsync({ inputData: input })
+  const boundInput = input.tool
+    ? {
+        ...input,
+        tool: {
+          ...bindRunToolPolicy(input.tool),
+          argumentHash: approvalArgumentHash({
+            toolName: input.tool.name,
+            arguments: input.tool.arguments,
+            policyVersion: TOOL_POLICY_VERSION,
+            runId: run.runId,
+            instanceId: mastraRuntimeConfig.instanceId
+          })
+        }
+      }
+    : input
+  await run.startAsync({ inputData: boundInput })
   const detail = await getRun(mastra, run.runId)
   if (!detail) throw new Error('Mastra did not persist the new workflow run.')
   return detail
@@ -296,6 +362,22 @@ export async function resolveRunApproval(
   if (!existing) throw new Error('Workflow run not found.')
   if (existing.state !== 'awaiting-approval' || existing.approval?.stepId !== input.stepId) {
     throw new Error('Workflow run is not awaiting this approval.')
+  }
+  if (existing.approval.argumentHash) {
+    const snapshot = await workflow(mastra).getWorkflowRunById(input.runId)
+    if (!snapshot) throw new Error('Workflow run not found.')
+    const runInput = inputOf(snapshot)
+    if (!runInput.tool) throw new Error('Tool approval metadata is missing.')
+    const expectedHash = approvalArgumentHash({
+      toolName: runInput.tool.name,
+      arguments: runInput.tool.arguments,
+      policyVersion: runInput.tool.policyVersion,
+      runId: input.runId,
+      instanceId: mastraRuntimeConfig.instanceId
+    })
+    if (expectedHash !== existing.approval.argumentHash) {
+      throw new Error('Tool approval identity changed. Start a new run before approving execution.')
+    }
   }
   const run = await workflow(mastra).createRun({ runId: input.runId, resourceId: existing.workspaceId })
   if (input.decision === 'decline') await run.cancel()

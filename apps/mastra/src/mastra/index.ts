@@ -6,11 +6,14 @@ import { MastraStorageExporter, Observability, SensitiveDataFilter } from "@mast
 import { hermesSupervisorAgent } from "./agents/hermes-supervisor.ts";
 import { hermesMastraMcpServer } from "./mcp/hermes-mcp.ts";
 import { indexConfiguredKnowledgeSources } from "./rag/source-catalog.ts";
+import { knowledgeApiRoutes } from "./rag/routes.ts";
 import { mastraRuntimeConfig } from "./runtime-config.ts";
 import { runApiRoutes } from "./runs/routes.ts";
 import { executionEvidenceScorer } from "./scorers/execution-evidence.ts";
 import { knowledgeVectorStore, mastraStorage } from "./storage.ts";
 import { hermesTaskLifecycle } from "./workflows/hermes-task-lifecycle.ts";
+import { turnApiRoutes } from "./turns/routes.ts";
+import { supervisorTurn } from "./workflows/supervisor-turn.ts";
 
 const auth = mastraRuntimeConfig.auth.jwtSecret
   ? new MastraJwtAuth({ secret: mastraRuntimeConfig.auth.jwtSecret })
@@ -35,7 +38,7 @@ async function verifiedCapabilities() {
 
 export const mastra = new Mastra({
   agents: { hermesSupervisorAgent },
-  workflows: { hermesTaskLifecycle },
+  workflows: { hermesTaskLifecycle, supervisorTurn },
   scorers: { executionEvidenceScorer },
   vectors: { knowledgeVectorStore },
   mcpServers: { hermesMastraMcpServer },
@@ -51,6 +54,10 @@ export const mastra = new Mastra({
         "*.token",
         "*.secret",
         "*.instructions",
+        "*.arguments",
+        "*.argumentsPreview",
+        "*.content",
+        "*.message",
         "*.systemContext",
         "*.response",
         "*.transcript",
@@ -70,6 +77,10 @@ export const mastra = new Mastra({
             "token",
             "secret",
             "instructions",
+            "arguments",
+            "argumentsPreview",
+            "content",
+            "message",
             "systemContext",
             "response",
             "transcript",
@@ -102,16 +113,21 @@ export const mastra = new Mastra({
           ok: true,
           service: "hermes-mastra-local",
           instanceId: mastraRuntimeConfig.instanceId,
+          runtimeLocation: mastraRuntimeConfig.runtimeLocation,
+          runtimeVersion: mastraRuntimeConfig.runtimeVersion,
           authConfigured: mastraRuntimeConfig.auth.configured,
           hermes: {
             configured: mastraRuntimeConfig.hermes.configured,
             executionOwner: true,
             composioOwner: true,
+            modelBoundary: mastraRuntimeConfig.modelBoundary,
           },
           capabilities: await verifiedCapabilities(),
         }),
       }),
       ...runApiRoutes,
+      ...turnApiRoutes,
+      ...knowledgeApiRoutes,
     ],
   },
 });

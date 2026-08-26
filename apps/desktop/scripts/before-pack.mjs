@@ -59,6 +59,7 @@
  */
 import { existsSync, rmSync, renameSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Arch } from 'electron-builder'
 import { stageNodePty, stageGetWindows } from './stage-native-deps.mjs'
 
@@ -110,9 +111,29 @@ export function preserveRollbackBackup(appOutDir, productExeName = 'Hermes.exe')
   }
 }
 
+export function includeRemoteMastraResources(
+  context,
+  bundleDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../build/mastra-remote')
+) {
+  if (!existsSync(bundleDirectory) || !context?.packager?.config) {
+    return false
+  }
+  const resources = Array.isArray(context.packager.config.extraResources)
+    ? context.packager.config.extraResources
+    : []
+  if (!resources.some(resource => resource?.to === 'mastra-remote')) {
+    resources.push({ from: bundleDirectory, to: 'mastra-remote', filter: ['linux-*'] })
+  }
+  context.packager.config.extraResources = resources
+  return true
+}
+
 export default async function beforePack(context) {
   const appOutDir = context && context.appOutDir
   const platformName = context && context.electronPlatformName
+  if (includeRemoteMastraResources(context)) {
+    console.log('[before-pack] included pinned Linux Mastra runtime for Orgo')
+  }
   try {
     // Windows: keep the previous working build as rollback material for the
     // post-build integrity gate (#69179) instead of destroying it. Falls
